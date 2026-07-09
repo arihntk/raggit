@@ -27,7 +27,11 @@ services:
     volumes:
       - raggit-qdrant-storage:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      test:
+        [
+          "CMD-SHELL",
+          "bash -c 'exec 3<>/dev/tcp/localhost/6333 && printf \"GET /healthz HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && timeout 2 cat <&3 | head -1 | grep -q \"200 OK\"'",
+        ]
       interval: 5s
       timeout: 5s
       retries: 5
