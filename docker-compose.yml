@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: raggit-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: raggit
+      POSTGRES_PASSWORD: raggit
+      POSTGRES_DB: raggit
+    ports:
+      - "5433:5432"
+    volumes:
+      - raggit-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raggit -d raggit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: raggit-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - raggit-qdrant-storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  raggit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: raggit-app
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://raggit:raggit@postgres:5432/raggit
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: raggit_chunks
+      LOG_LEVEL: INFO
+      STORAGE_SOURCE_TYPE: local
+      STORAGE_URI: /data/documents
+      STORAGE_POLL_INTERVAL_SECONDS: "30"
+    volumes:
+      - ./data/documents:/data/documents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    command: ["raggit", "watch"]
+
+volumes:
+  raggit-postgres-data:
+  raggit-qdrant-storage:
