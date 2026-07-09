@@ -26,8 +26,11 @@ def clean_chunk(text: str) -> str:
     # Fix hyphenation at line ends: "word-\nword" -> "wordword"
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
 
-    # Collapse multiple whitespace/newlines
+    # Collapse multiple spaces, strip whitespace around line breaks,
+    # and collapse excessive blank lines
     text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n\s*\n+", "\n\n", text)
+    lines = [line.strip() for line in text.splitlines()]
+    text = "\n".join(lines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
 
     return text.strip()
