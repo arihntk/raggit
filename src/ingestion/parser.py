@@ -9,7 +9,6 @@ from pathlib import Path
 import fitz  # PyMuPDF
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
-
 from raggit.core.logging import get_logger
 
 logger = get_logger("raggit.ingestion.parser")

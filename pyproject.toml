@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "raggit"
@@ -60,8 +60,9 @@ dev = [
 [project.scripts]
 raggit = "raggit.cli.main:app"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/raggit"]
+[tool.setuptools]
+package-dir = { "raggit" = "src" }
+packages = ["raggit"]
 
 [tool.uv]
 default-groups = ["dev"]

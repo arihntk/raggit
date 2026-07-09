@@ -5,9 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from raggit.api.models import DocumentStatus, RAGConfig
 from raggit.core.logging import get_logger
 from raggit.db.repository import ChunkRepository, DocumentRepository
@@ -17,6 +14,8 @@ from raggit.ingestion.cleaner import clean_chunk
 from raggit.ingestion.embedder import create_embedder
 from raggit.ingestion.parser import parse_document
 from raggit.storage.base import Storage, StorageFile
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger("raggit.ingestion.indexer")
 

@@ -13,7 +13,6 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
-
 from raggit.api.models import RAGConfig
 from raggit.core.logging import get_logger
 

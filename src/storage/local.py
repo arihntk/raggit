@@ -7,13 +7,6 @@ import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
 
-from watchdog.events import (
-    DirCreatedEvent,
-    FileSystemEvent,
-    FileSystemEventHandler,
-)
-from watchdog.observers import Observer
-
 from raggit.api.models import SourceType
 from raggit.core.logging import get_logger
 from raggit.storage.base import (
@@ -25,6 +18,12 @@ from raggit.storage.base import (
     Storage,
     StorageFile,
 )
+from watchdog.events import (
+    DirCreatedEvent,
+    FileSystemEvent,
+    FileSystemEventHandler,
+)
+from watchdog.observers import Observer
 
 logger = get_logger("raggit.storage.local")
 

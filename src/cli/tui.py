@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll
-from textual.widgets import Button, Header, Input, Label, Static
-
 from raggit.core.config import get_settings
 from raggit.db.session import AsyncSessionLocal
 from raggit.ingestion.indexer import Indexer
 from raggit.storage.factory import create_storage
+from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll
+from textual.widgets import Button, Header, Input, Label, Static
 
 
 class RAGgitApp(App[None]):

@@ -6,9 +6,6 @@ import asyncio
 from pathlib import Path
 
 import typer
-from rich.console import Console
-from rich.table import Table
-
 from raggit.api.models import RAGConfig
 from raggit.core.config import get_settings
 from raggit.core.logging import configure_logging, get_logger
@@ -19,6 +16,8 @@ from raggit.llm.factory import create_llm
 from raggit.retrieval.engine import RetrievalEngine
 from raggit.storage.base import FileAddedEvent, FileDeletedEvent, FileModifiedEvent
 from raggit.storage.factory import create_storage
+from rich.console import Console
+from rich.table import Table
 
 app = typer.Typer(
     name="raggit",

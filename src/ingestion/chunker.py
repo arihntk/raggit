@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-
 from raggit.api.models import RAGConfig
 
 

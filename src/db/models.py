@@ -5,12 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
+from raggit.api.models import DocumentStatus, SourceType
+from raggit.db.base import Base
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from raggit.api.models import DocumentStatus, SourceType
-from raggit.db.base import Base
 
 
 class DocumentModel(Base):
