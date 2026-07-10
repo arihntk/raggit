@@ -6,9 +6,10 @@ from abc import ABC, abstractmethod
 
 import httpx
 import numpy as np
+from sentence_transformers import SentenceTransformer
+
 from raggit.api.models import EmbeddingConfig
 from raggit.core.logging import get_logger
-from sentence_transformers import SentenceTransformer
 
 logger = get_logger("raggit.ingestion.embedder")
 

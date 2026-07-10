@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+
 from raggit.api.models import LLMConfig
 from raggit.core.logging import get_logger
 from raggit.llm.base import LLMProvider

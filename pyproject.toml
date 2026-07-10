@@ -61,7 +61,6 @@ dev = [
 raggit = "raggit.cli.main:app"
 
 [tool.setuptools]
-package-dir = { "raggit" = "src" }
 packages = ["raggit"]
 
 [tool.uv]
@@ -93,6 +92,10 @@ python_version = "3.14"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

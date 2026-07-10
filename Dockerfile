@@ -12,7 +12,7 @@ COPY pyproject.toml .
 RUN uv sync --no-dev --no-install-project
 
 # Copy source and install package
-COPY src ./src
+COPY raggit ./raggit
 RUN uv sync --no-dev
 
 # Runtime stage
@@ -36,7 +36,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 RUN mkdir -p /data/documents
 
 # Copy source for editable-style imports (not strictly needed because package is installed in venv)
-COPY src ./src
+COPY raggit ./raggit
 
 EXPOSE 8000
 

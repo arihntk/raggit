@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from raggit.core.config import get_settings
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from raggit.core.config import get_settings
 
 settings = get_settings()
 
