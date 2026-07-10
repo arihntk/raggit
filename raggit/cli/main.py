@@ -221,14 +221,5 @@ async def _status() -> None:
     console.print(f"Total documents: {len(docs)}")
 
 
-@app.command()
-def tui() -> None:
-    """Launch the Textual TUI dashboard."""
-    from raggit.cli.tui import RAGgitApp
-
-    app = RAGgitApp()
-    app.run()
-
-
 if __name__ == "__main__":
     app()

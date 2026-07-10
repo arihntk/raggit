@@ -1,1 +1,1 @@
-"""CLI and TUI entry points."""
+"""CLI entry points."""

@@ -78,7 +78,6 @@ flowchart TB
 - **Vector Store:** Qdrant
 - **Infra:** Docker Compose
 - **CLI:** `typer` + `rich`
-- **TUI:** `textual`
 - **ORM/Migrations:** SQLAlchemy 2.0 + Alembic
 
 ---
@@ -159,7 +158,6 @@ uv run raggit watch ./data/documents
 | `raggit watch <path>` | Continuously watch and index |
 | `raggit query "<question>"` | Ask a question |
 | `raggit status` | Show indexed document status |
-| `raggit tui` | Launch Textual dashboard |
 
 ---
 

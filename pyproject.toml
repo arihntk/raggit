@@ -21,7 +21,6 @@ classifiers = [
 dependencies = [
     "typer>=0.15.0",
     "rich>=13.9.0",
-    "textual>=1.0.0",
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
