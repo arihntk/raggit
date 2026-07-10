@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from raggit.api.models import DocumentStatus, SourceType
-from raggit.db.models import ChunkModel, DocumentModel, LogModel
+from raggit.api.models import DocumentStatus, QueryFilters, SourceType
+from raggit.db.models import (
+    ChunkModel,
+    DocumentModel,
+    EmbeddingCollectionModel,
+    LogModel,
+)
 
 
 class DocumentRepository:
@@ -50,6 +56,8 @@ class DocumentRepository:
         filename: str,
         content_hash: str | None = None,
         status: DocumentStatus = DocumentStatus.PENDING,
+        tenant_id: str | None = None,
+        tags: list[str] | None = None,
     ) -> DocumentModel:
         """Insert or re-activate a document."""
         if isinstance(source_type, str):
@@ -63,6 +71,10 @@ class DocumentRepository:
             if content_hash is not None:
                 existing.content_hash = content_hash
             existing.filename = filename
+            if tenant_id is not None:
+                existing.tenant_id = tenant_id
+            if tags is not None:
+                existing.tags = tags
             await self.session.flush()
             return existing
 
@@ -72,6 +84,8 @@ class DocumentRepository:
             filename=filename,
             content_hash=content_hash,
             status=status,
+            tenant_id=tenant_id,
+            tags=tags or [],
         )
         self.session.add(doc)
         await self.session.flush()
@@ -120,6 +134,12 @@ class ChunkRepository:
         token_count: int | None = None,
         embedding_model: str | None = None,
         vector_id: UUID | None = None,
+        parent_chunk_index: int | None = None,
+        section_title: str | None = None,
+        page_number: int | None = None,
+        start_offset: int | None = None,
+        end_offset: int | None = None,
+        content_hash: str | None = None,
     ) -> ChunkModel:
         """Create a new chunk."""
         chunk = ChunkModel(
@@ -130,6 +150,12 @@ class ChunkRepository:
             token_count=token_count,
             embedding_model=embedding_model,
             vector_id=str(vector_id) if vector_id else None,
+            parent_chunk_index=parent_chunk_index,
+            section_title=section_title,
+            page_number=page_number,
+            start_offset=start_offset,
+            end_offset=end_offset,
+            content_hash=content_hash,
         )
         self.session.add(chunk)
         await self.session.flush()
@@ -157,30 +183,135 @@ class ChunkRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_siblings(
+        self,
+        document_id: UUID,
+        chunk_index: int,
+        window: int,
+    ) -> list[ChunkModel]:
+        """Return chunks in [chunk_index - window, chunk_index + window] for a document."""
+        if window <= 0:
+            return []
+        result = await self.session.execute(
+            select(ChunkModel)
+            .where(
+                ChunkModel.document_id == str(document_id),
+                ChunkModel.chunk_index >= chunk_index - window,
+                ChunkModel.chunk_index <= chunk_index + window,
+            )
+            .order_by(ChunkModel.chunk_index)
+        )
+        return list(result.scalars().all())
+
     async def count_all(self) -> int:
         """Count total chunks in the index."""
         result = await self.session.execute(select(func.count()).select_from(ChunkModel))
         return int(result.scalar_one())
 
-    async def bm25_search(self, query: str, limit: int = 50) -> list[tuple[ChunkModel, float]]:
-        """Execute a BM25-ish full-text search against chunk content.
+    def _apply_filters(self, stmt, filters: QueryFilters | None):  # type: ignore[no-untyped-def]
+        """Join documents and apply metadata filters."""
+        if filters is None:
+            return stmt
 
-        Uses PostgreSQL ts_rank_cd for ranking.
-        """
-        from sqlalchemy import func
+        stmt = stmt.join(DocumentModel, ChunkModel.document_id == DocumentModel.id)
 
+        if filters.source_uri_prefix:
+            stmt = stmt.where(DocumentModel.source_uri.startswith(filters.source_uri_prefix))
+        if filters.filename_prefix:
+            stmt = stmt.where(DocumentModel.filename.startswith(filters.filename_prefix))
+        if filters.tenant_id:
+            stmt = stmt.where(DocumentModel.tenant_id == filters.tenant_id)
+        if filters.document_ids:
+            ids = [str(d) for d in filters.document_ids]
+            stmt = stmt.where(ChunkModel.document_id.in_(ids))
+        if filters.created_after:
+            stmt = stmt.where(DocumentModel.created_at >= filters.created_after)
+        if filters.created_before:
+            stmt = stmt.where(DocumentModel.created_at <= filters.created_before)
+        if filters.tags:
+            # PostgreSQL array overlap: document tags contain any requested tag
+            stmt = stmt.where(DocumentModel.tags.overlap(filters.tags))
+        return stmt
+
+    async def bm25_search(
+        self,
+        query: str,
+        limit: int = 50,
+        filters: QueryFilters | None = None,
+    ) -> list[tuple[ChunkModel, float]]:
+        """Execute a BM25-ish full-text search against chunk content."""
         ts_query = func.plainto_tsquery("english", query)
-        stmt = (
-            select(
-                ChunkModel,
-                func.ts_rank_cd(ChunkModel.fts_vector, ts_query).label("rank"),
-            )
-            .where(ChunkModel.fts_vector.op("@@")(ts_query))
-            .order_by(func.ts_rank_cd(ChunkModel.fts_vector, ts_query).desc())
-            .limit(limit)
+        stmt = select(
+            ChunkModel,
+            func.ts_rank_cd(ChunkModel.fts_vector, ts_query).label("rank"),
+        ).where(ChunkModel.fts_vector.op("@@")(ts_query))
+        stmt = self._apply_filters(stmt, filters)
+        stmt = stmt.order_by(func.ts_rank_cd(ChunkModel.fts_vector, ts_query).desc()).limit(
+            limit
         )
         result = await self.session.execute(stmt)
         return [(row[0], float(row[1])) for row in result.all()]
+
+
+class EmbeddingCollectionRepository:
+    """Tracks embedding model -> Qdrant collection mappings."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get_active(self) -> EmbeddingCollectionModel | None:
+        result = await self.session.execute(
+            select(EmbeddingCollectionModel).where(EmbeddingCollectionModel.is_active.is_(True))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, name: str) -> EmbeddingCollectionModel | None:
+        result = await self.session.execute(
+            select(EmbeddingCollectionModel).where(EmbeddingCollectionModel.name == name)
+        )
+        return result.scalar_one_or_none()
+
+    async def activate(
+        self,
+        name: str,
+        embedding_provider: str,
+        embedding_model: str,
+        vector_size: int,
+        model_version: str | None = None,
+        meta: dict[str, Any] | None = None,
+    ) -> EmbeddingCollectionModel:
+        """Mark a collection as the active one; deactivate others."""
+        await self.session.execute(
+            update(EmbeddingCollectionModel).values(is_active=False)
+        )
+        existing = await self.get_by_name(name)
+        if existing:
+            existing.is_active = True
+            existing.embedding_provider = embedding_provider
+            existing.embedding_model = embedding_model
+            existing.model_version = model_version
+            existing.vector_size = vector_size
+            if meta is not None:
+                existing.meta = meta
+            await self.session.flush()
+            return existing
+
+        row = EmbeddingCollectionModel(
+            name=name,
+            embedding_provider=embedding_provider,
+            embedding_model=embedding_model,
+            model_version=model_version,
+            vector_size=vector_size,
+            is_active=True,
+            meta=meta,
+        )
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def list_all(self) -> list[EmbeddingCollectionModel]:
+        result = await self.session.execute(select(EmbeddingCollectionModel))
+        return list(result.scalars().all())
 
 
 class LogRepository:
