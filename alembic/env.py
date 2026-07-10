@@ -15,7 +15,12 @@ from raggit.core.config import get_settings
 from raggit.db.base import Base
 
 # Import all models so they are registered on Base.metadata
-from raggit.db.models import ChunkModel, DocumentModel, LogModel  # noqa: F401
+from raggit.db.models import (  # noqa: F401
+    ChunkModel,
+    DocumentModel,
+    EmbeddingCollectionModel,
+    LogModel,
+)
 
 settings = get_settings()
 

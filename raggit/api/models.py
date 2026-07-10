@@ -31,6 +31,14 @@ class SourceType(StrEnum):
     AZURE_BLOB = "azure_blob"
 
 
+class QueryRewriteMode(StrEnum):
+    """Query rewriting strategy for sparse or ambiguous queries."""
+
+    NONE = "none"
+    MULTI_QUERY = "multi_query"
+    HYDE = "hyde"
+
+
 class Document(BaseModel):
     """Public representation of an indexed document."""
 
@@ -43,6 +51,8 @@ class Document(BaseModel):
     content_hash: str | None = None
     status: DocumentStatus
     error_message: str | None = None
+    tenant_id: str | None = None
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
@@ -61,7 +71,35 @@ class Chunk(BaseModel):
     token_count: int | None = None
     embedding_model: str | None = None
     vector_id: UUID | None = None
+    # Hierarchical / location metadata
+    parent_chunk_index: int | None = None
+    section_title: str | None = None
+    page_number: int | None = None
+    start_offset: int | None = None
+    end_offset: int | None = None
+    content_hash: str | None = None
+    # Denormalized document fields for citations / filters
+    source_uri: str | None = None
+    filename: str | None = None
+    tenant_id: str | None = None
+    tags: list[str] = Field(default_factory=list)
     created_at: datetime
+
+
+class Citation(BaseModel):
+    """Source citation for an answer span or retrieved chunk."""
+
+    chunk_id: UUID
+    document_id: UUID
+    source_uri: str | None = None
+    filename: str | None = None
+    chunk_index: int
+    page_number: int | None = None
+    section_title: str | None = None
+    start_offset: int | None = None
+    end_offset: int | None = None
+    score: float | None = None
+    excerpt: str | None = None
 
 
 class RetrievedChunk(BaseModel):
@@ -71,6 +109,20 @@ class RetrievedChunk(BaseModel):
     score: float
     rank_bm25: int | None = None
     rank_semantic: int | None = None
+    rank_rerank: int | None = None
+    citation: Citation | None = None
+
+
+class QueryFilters(BaseModel):
+    """Optional metadata filters applied during retrieval."""
+
+    source_uri_prefix: str | None = None
+    filename_prefix: str | None = None
+    tenant_id: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    document_ids: list[UUID] = Field(default_factory=list)
+    created_after: datetime | None = None
+    created_before: datetime | None = None
 
 
 class QueryResult(BaseModel):
@@ -80,6 +132,11 @@ class QueryResult(BaseModel):
     sanitized_keywords: list[str]
     chunks: list[RetrievedChunk]
     answer: str | None = None
+    citations: list[Citation] = Field(default_factory=list)
+    refused: bool = False
+    refusal_reason: str | None = None
+    grounded: bool | None = None
+    rewritten_queries: list[str] = Field(default_factory=list)
     total_chunks_considered: int = Field(..., description="Total chunks in the index")
 
 
@@ -115,9 +172,59 @@ class EmbeddingConfig(BaseModel):
 
     provider: str = "sentence-transformers"  # sentence-transformers, openai
     model: str = "BAAI/bge-small-en-v1.5"
+    model_version: str | None = None  # optional pinned revision / version tag
     api_key: str | None = None
     base_url: str | None = None
     batch_size: int = 32
+    max_concurrency: int = 4
+    circuit_breaker_failures: int = 5
+    circuit_breaker_reset_seconds: float = 60.0
+
+
+class RerankerConfig(BaseModel):
+    """Cross-encoder reranker configuration."""
+
+    enabled: bool = False
+    model: str = "BAAI/bge-reranker-base"
+    top_n: int = 20  # candidates to rerank after RRF
+
+
+class RetrievalConfig(BaseModel):
+    """Hybrid retrieval knobs."""
+
+    min_top_k: int = 5
+    max_top_k: int = 50
+    top_k_ratio: float = 0.01
+    rrf_k: int = 60
+    rrf_weight_bm25: float = 1.0
+    rrf_weight_semantic: float = 1.0
+    min_score: float | None = None  # drop chunks below this after fusion/rerank
+    parent_window: int = 0  # expand +/-N sibling chunks around hits
+    query_rewrite: QueryRewriteMode = QueryRewriteMode.NONE
+    multi_query_count: int = 3
+    reranker: RerankerConfig = Field(default_factory=RerankerConfig)
+
+
+class SafetyConfig(BaseModel):
+    """Answer quality and safety settings."""
+
+    refuse_on_empty: bool = True
+    refuse_on_low_score: bool = True
+    min_answer_score: float | None = 0.01
+    groundedness_check: bool = True
+    pii_redaction: bool = False
+    prompt_injection_hardening: bool = True
+
+
+class ChunkingConfig(BaseModel):
+    """Chunking behaviour."""
+
+    chunk_size: int = 512  # tokens when token-based, else characters
+    chunk_overlap: int = 64
+    token_based: bool = True
+    dedup_enabled: bool = True
+    dedup_similarity: float = 0.92
+    format_aware: bool = True
 
 
 class RAGConfig(BaseModel):
@@ -128,12 +235,17 @@ class RAGConfig(BaseModel):
     qdrant_collection: str = "raggit_chunks"
     qdrant_api_key: str | None = None
     log_level: str = "INFO"
+    # Back-compat flat chunk fields (mirrored into chunking)
     chunk_size: int = 512
     chunk_overlap: int = 128
     min_top_k: int = 5
     max_top_k: int = 50
     top_k_ratio: float = 0.01
     rrf_k: int = 60
+    chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
+    retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    safety: SafetyConfig = Field(default_factory=SafetyConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     storage: StorageConfig | None = None
+    default_tenant_id: str | None = None
