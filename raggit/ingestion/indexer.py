@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from raggit.api.models import DocumentStatus, RAGConfig, SourceType
+from raggit.core.audit import log_event
 from raggit.core.logging import get_logger
 from raggit.db.repository import (
     ChunkRepository,
@@ -90,6 +93,19 @@ class Indexer:
 
         try:
             content_hash = await self.storage.compute_hash(file.path)
+            await log_event(
+                session,
+                level="INFO",
+                component="raggit.ingestion.indexer",
+                message="Started indexing file",
+                extra={
+                    "document_id": str(document_id),
+                    "source_uri": file.path,
+                    "filename": file.relative_path,
+                    "tenant_id": doc.tenant_id,
+                    "content_hash": content_hash,
+                },
+            )
             if (
                 previous_hash is not None
                 and previous_hash == content_hash
@@ -203,12 +219,39 @@ class Indexer:
                 chunks=len(prepared),
                 collection=self.vector_store.collection,
             )
+            await log_event(
+                session,
+                level="INFO",
+                component="raggit.ingestion.indexer",
+                message="Indexed file successfully",
+                extra={
+                    "document_id": str(document_id),
+                    "source_uri": file.path,
+                    "filename": file.relative_path,
+                    "chunks": len(prepared),
+                    "collection": self.vector_store.collection,
+                    "tenant_id": doc.tenant_id,
+                },
+            )
 
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc!s}"
             if self.config.safety.pii_redaction:
                 error_msg = redact_pii(error_msg)
             logger.exception("Failed to index file", path=file.path, error=error_msg)
+            await log_event(
+                session,
+                level="ERROR",
+                component="raggit.ingestion.indexer",
+                message="Failed to index file",
+                extra={
+                    "document_id": str(document_id),
+                    "source_uri": file.path,
+                    "filename": file.relative_path,
+                    "tenant_id": doc.tenant_id,
+                    "error": error_msg,
+                },
+            )
             await doc_repo.update_status(
                 document_id, DocumentStatus.FAILED, error_message=error_msg
             )
@@ -234,8 +277,24 @@ class Indexer:
         await doc_repo.hard_delete(document_id)
 
         logger.info("Removed document and associated data", path=file.path)
+        await log_event(
+            session,
+            level="INFO",
+            component="raggit.ingestion.indexer",
+            message="Removed document and associated data",
+            extra={
+                "document_id": str(document_id),
+                "source_uri": file.path,
+                "filename": file.relative_path,
+            },
+        )
 
-    async def sync_all(self, session: AsyncSession) -> None:
+    async def sync_all(
+        self,
+        session: AsyncSession,
+        *,
+        progress_callback: Callable[[StorageFile, int, int], Any] | None = None,
+    ) -> None:
         """Full sync: index new/modified files, remove missing ones."""
         files = await self.storage.list_files()
         current_uris = {f.path for f in files}
@@ -253,8 +312,11 @@ class Indexer:
             )
             await self.remove_file(session, file)
 
-        for file in files:
+        total = len(files)
+        for i, file in enumerate(files, start=1):
             await self.index_file(session, file)
+            if progress_callback is not None:
+                progress_callback(file, i, total)
 
     async def close(self) -> None:
         """Release resources."""

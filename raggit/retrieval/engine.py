@@ -15,6 +15,7 @@ from raggit.api.models import (
     RAGConfig,
     RetrievedChunk,
 )
+from raggit.core.audit import log_event
 from raggit.core.logging import get_logger
 from raggit.db.models import ChunkModel
 from raggit.db.repository import ChunkRepository, DocumentRepository
@@ -177,6 +178,21 @@ class RetrievalEngine:
             rewrite_mode=self.query_rewrite.value,
             rewritten=rewritten,
         )
+        await log_event(
+            self.chunk_repo.session,
+            level="INFO",
+            component="raggit.retrieval.engine",
+            message="Query received",
+            extra={
+                "query": cleaned_query,
+                "keywords": keywords,
+                "filters": filters.model_dump(mode="json") if filters else None,
+                "top_k": top_k,
+                "total_chunks": total_chunks,
+                "rewrite_mode": self.query_rewrite.value,
+                "rewritten_queries": rewritten,
+            },
+        )
 
         candidate_limit = top_k * 2
         if self._reranker is not None and self.config:
@@ -324,6 +340,33 @@ class RetrievalEngine:
             refused, refusal_reason = should_refuse(retrieved, self.safety)
 
         citations = [r.citation for r in retrieved if r.citation is not None]
+
+        await log_event(
+            self.chunk_repo.session,
+            level="INFO",
+            component="raggit.retrieval.engine",
+            message="Retrieval completed",
+            extra={
+                "query": cleaned_query,
+                "result_count": len(retrieved),
+                "refused": refused,
+                "refusal_reason": refusal_reason,
+                "chunks": [
+                    {
+                        "chunk_id": str(r.chunk.id),
+                        "document_id": str(r.chunk.document_id),
+                        "chunk_index": r.chunk.chunk_index,
+                        "source_uri": r.chunk.source_uri,
+                        "filename": r.chunk.filename,
+                        "score": r.score,
+                        "rank_bm25": r.rank_bm25,
+                        "rank_semantic": r.rank_semantic,
+                        "rank_rerank": r.rank_rerank,
+                    }
+                    for r in retrieved
+                ],
+            },
+        )
 
         return QueryResult(
             query=query,

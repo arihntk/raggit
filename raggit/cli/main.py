@@ -7,9 +7,19 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+from rich.tree import Tree
 
-from raggit.api.models import QueryFilters, QueryRewriteMode, RAGConfig
+from raggit.api.models import (
+    Citation,
+    QueryFilters,
+    QueryResult,
+    QueryRewriteMode,
+    RAGConfig,
+)
+from raggit.core.audit import log_event
 from raggit.core.config import get_settings
 from raggit.core.logging import configure_logging, get_logger
 from raggit.db.session import AsyncSessionLocal
@@ -131,10 +141,55 @@ async def _ingest(path: Path) -> None:
     storage = create_storage(storage_config)
     indexer = Indexer(storage, config)
 
+    started_at = asyncio.get_event_loop().time()
     try:
         async with AsyncSessionLocal() as session, session.begin():
-            await indexer.sync_all(session)
-        console.print("[green]Ingestion complete.[/green]")
+            await log_event(
+                session,
+                level="INFO",
+                component="raggit.cli.ingest",
+                message="Ingestion started",
+                extra={
+                    "path": str(path.resolve()),
+                    "storage_type": storage_config.source_type.value,
+                },
+            )
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+                console=console,
+            ) as progress:
+                task = progress.add_task("Indexing files...", total=None)
+
+                def _update(file_obj: object, current: int, total: int) -> None:
+                    if total > 0:
+                        progress.update(task, total=total, completed=current)
+                    sf = getattr(file_obj, "relative_path", str(file_obj))
+                    progress.update(task, description=f"Indexing {sf}")
+
+                await indexer.sync_all(session, progress_callback=_update)
+                progress.update(task, description="Indexing complete", completed=1, total=1)
+
+            await log_event(
+                session,
+                level="INFO",
+                component="raggit.cli.ingest",
+                message="Ingestion completed",
+                extra={
+                    "path": str(path.resolve()),
+                    "duration_seconds": asyncio.get_event_loop().time() - started_at,
+                },
+            )
+
+        elapsed = asyncio.get_event_loop().time() - started_at
+        console.print(f"[green]Ingestion complete in {elapsed:.2f}s.[/green]")
+    except Exception as exc:
+        logger.exception("Ingestion failed", error=str(exc))
+        console.print(f"[red]Ingestion failed: {exc}[/red]")
+        raise typer.Exit(1) from exc
     finally:
         await indexer.close()
         await storage.close()
@@ -164,14 +219,33 @@ async def _watch(path: Path | None) -> None:
     indexer = Indexer(storage, config)
     poll_interval = float(storage_config.poll_interval_seconds)
 
+    console.print(Panel(
+        f"[bold]Watching[/bold] {storage_config.uri}\n"
+        f"Poll interval: {poll_interval}s",
+        title="raggit watch",
+        border_style="blue",
+    ))
+
     async with AsyncSessionLocal() as session, session.begin():
+        await log_event(
+            session,
+            level="INFO",
+            component="raggit.cli.watch",
+            message="Watcher started",
+            extra={
+                "path": storage_config.uri,
+                "poll_interval_seconds": poll_interval,
+            },
+        )
         await indexer.sync_all(session)
 
     async def on_event(event: FileEvent) -> None:
         async with AsyncSessionLocal() as session, session.begin():
             if isinstance(event, (FileAddedEvent, FileModifiedEvent)):
+                console.print(f"[cyan]+[/cyan] {event.file.relative_path}")
                 await indexer.index_file(session, event.file)
             elif isinstance(event, FileDeletedEvent):
+                console.print(f"[red]-[/red] {event.file.relative_path}")
                 await indexer.remove_file(session, event.file)
 
     try:
@@ -207,6 +281,41 @@ def query(
             rewrite=rewrite,
         )
     )
+
+
+def _format_retrieved_table(result: QueryResult) -> Table:
+    """Render a Rich table for retrieved chunks."""
+    table = Table(title="Retrieved Chunks")
+    table.add_column("Rank", justify="right")
+    table.add_column("Score", justify="right")
+    table.add_column("Source")
+    table.add_column("Chunk")
+    for rank, retrieved in enumerate(result.chunks, start=1):
+        source = retrieved.chunk.filename or retrieved.chunk.source_uri or ""
+        table.add_row(
+            str(rank),
+            f"{retrieved.score:.4f}",
+            source[:40],
+            retrieved.chunk.cleaned_content[:200],
+        )
+    return table
+
+
+def _format_citation_tree(citations: list[Citation]) -> Tree:
+    """Render a Rich tree for citations."""
+    tree = Tree("[bold]Sources[/bold]")
+    for i, cite in enumerate(citations, start=1):
+        loc = cite.filename or cite.source_uri or str(cite.chunk_id)
+        extras: list[str] = []
+        if cite.page_number is not None:
+            extras.append(f"page {cite.page_number}")
+        if cite.section_title:
+            extras.append(cite.section_title)
+        if cite.start_offset is not None and cite.end_offset is not None:
+            extras.append(f"offsets {cite.start_offset}-{cite.end_offset}")
+        suffix = f" ({', '.join(extras)})" if extras else ""
+        tree.add(f"[{i}] {loc}{suffix} — chunk {cite.chunk_index}")
+    return tree
 
 
 async def _query(
@@ -245,9 +354,20 @@ async def _query(
     embedder = create_embedder(config.embedding)
     vector_store = VectorStore(config)
 
-    # Prefer active embedding collection if recorded
-    async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal() as session, session.begin():
         from raggit.db.repository import EmbeddingCollectionRepository
+
+        await log_event(
+            session,
+            level="INFO",
+            component="raggit.cli.query",
+            message="Query received",
+            extra={
+                "question": question,
+                "filters": filters.model_dump(mode="json"),
+                "rewrite": rewrite.value,
+            },
+        )
 
         active = await EmbeddingCollectionRepository(session).get_active()
         if active is not None:
@@ -270,40 +390,51 @@ async def _query(
             llm=llm,
         )
 
-        result = await engine.retrieve(question, filters=filters)
+        with console.status("[bold green]Retrieving relevant chunks..."):
+            result = await engine.retrieve(question, filters=filters)
 
-        table = Table(title="Retrieved Chunks")
-        table.add_column("Rank", justify="right")
-        table.add_column("Score", justify="right")
-        table.add_column("Source")
-        table.add_column("Chunk")
-        for rank, retrieved in enumerate(result.chunks, start=1):
-            source = retrieved.chunk.filename or retrieved.chunk.source_uri or ""
-            table.add_row(
-                str(rank),
-                f"{retrieved.score:.4f}",
-                source[:40],
-                retrieved.chunk.cleaned_content[:200],
-            )
-        console.print(table)
+        console.print(_format_retrieved_table(result))
 
         if result.refused and not llm:
-            console.print(f"\n[yellow]Refused:[/yellow] {result.refusal_reason}")
+            console.print(Panel(
+                f"[yellow]{result.refusal_reason}[/yellow]",
+                title="Refused",
+                border_style="yellow",
+            ))
         elif llm is not None:
-            result = await augment_and_answer(llm, result, safety=config.safety)
-            console.print("\n[bold cyan]Answer:[/bold cyan]")
-            console.print(result.answer or "")
+            with console.status("[bold green]Generating answer..."):
+                result = await augment_and_answer(llm, result, safety=config.safety)
+
+            answer_panel = Panel(
+                result.answer or "[dim]No answer produced.[/dim]",
+                title="Answer",
+                border_style="cyan",
+            )
+            console.print(answer_panel)
+
             if result.grounded is False:
                 console.print("[yellow]Groundedness check failed[/yellow]")
+
+            if result.citations:
+                console.print(_format_citation_tree(result.citations))
+
+            await log_event(
+                session,
+                level="INFO",
+                component="raggit.cli.query",
+                message="Answer generated",
+                extra={
+                    "question": question,
+                    "answer": result.answer,
+                    "refused": result.refused,
+                    "grounded": result.grounded,
+                    "citation_count": len(result.citations),
+                },
+            )
         else:
             console.print("\n[yellow]No LLM configured; showing retrieved chunks only.[/yellow]")
             if result.citations:
-                console.print("\n[bold]Citations:[/bold]")
-                for i, cite in enumerate(result.citations, start=1):
-                    console.print(
-                        f"  [{i}] {cite.filename or cite.source_uri} "
-                        f"chunk={cite.chunk_index} id={cite.chunk_id}"
-                    )
+                console.print(_format_citation_tree(result.citations))
 
         await engine.close()
 
