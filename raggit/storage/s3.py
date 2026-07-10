@@ -29,13 +29,6 @@ def _is_supported(key: str) -> bool:
     return any(key.lower().endswith(ext) for ext in SUPPORTED_EXTENSIONS)
 
 
-def _strip_prefix(key: str, prefix: str | None) -> str:
-    """Return the key with the prefix removed."""
-    if prefix and key.startswith(prefix):
-        return key[len(prefix) :].lstrip("/")
-    return key
-
-
 def _to_uri(bucket: str, key: str) -> str:
     """Build an s3:// URI for a bucket and key."""
     return f"s3://{bucket}/{key}"
@@ -68,9 +61,14 @@ class S3Storage(Storage):
         if self.prefix:
             self.prefix += "/"
         self._client: Any | None = None
+        self._client_ctx: Any | None = None
 
-    def _get_client(self) -> Any:
-        """Lazy-load and cache the aiobotocore S3 client."""
+    async def _get_client(self) -> Any:
+        """Lazy-load and cache the aiobotocore S3 client.
+
+        aiobotocore's ``create_client`` returns an async context manager; we
+        enter it once and keep the live client for the lifetime of this backend.
+        """
         if self._client is not None:
             return self._client
 
@@ -92,16 +90,17 @@ class S3Storage(Storage):
         if self.config.aws_secret_access_key:
             kwargs["aws_secret_access_key"] = self.config.aws_secret_access_key
 
-        self._client = session.create_client("s3", **kwargs)
+        self._client_ctx = session.create_client("s3", **kwargs)
+        self._client = await self._client_ctx.__aenter__()
         return self._client
 
     async def list_files(self) -> list[StorageFile]:
         """List all supported objects under the configured prefix."""
-        client = self._get_client()
+        client = await self._get_client()
         files: list[StorageFile] = []
         paginator = client.get_paginator("list_objects_v2")
 
-        params = {"Bucket": self.bucket}
+        params: dict[str, Any] = {"Bucket": self.bucket}
         if self.prefix:
             params["Prefix"] = self.prefix
 
@@ -110,19 +109,22 @@ class S3Storage(Storage):
                 key = obj["Key"]
                 if not _is_supported(key):
                     continue
+                last_modified = obj["LastModified"]
+                if last_modified.tzinfo is None:
+                    last_modified = last_modified.replace(tzinfo=UTC)
                 files.append(
                     _to_storage_file(
                         bucket=self.bucket,
                         key=key,
                         size=obj["Size"],
-                        modified_at=obj["LastModified"].replace(tzinfo=UTC),
+                        modified_at=last_modified,
                     )
                 )
         return files
 
     async def read_file(self, path: str) -> bytes:
         """Read object bytes from S3."""
-        client = self._get_client()
+        client = await self._get_client()
         key = self._key_from_path(path)
         response = await client.get_object(Bucket=self.bucket, Key=key)
         async with response["Body"] as stream:
@@ -131,20 +133,22 @@ class S3Storage(Storage):
 
     async def file_exists(self, path: str) -> bool:
         """Check if an object exists in S3."""
-        client = self._get_client()
+        client = await self._get_client()
         key = self._key_from_path(path)
         try:
             await client.head_object(Bucket=self.bucket, Key=key)
-        except client.exceptions.ClientError as exc:
-            error_code = exc.response.get("Error", {}).get("Code", "Unknown")
-            if error_code == "404":
+        except Exception as exc:
+            response = getattr(exc, "response", None) or {}
+            error_code = str(response.get("Error", {}).get("Code", ""))
+            status = response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if error_code in {"404", "NoSuchKey", "NotFound"} or status == 404:
                 return False
             raise
         return True
 
     async def compute_hash(self, path: str) -> str:
         """Return the ETag for the S3 object as a stable hash."""
-        client = self._get_client()
+        client = await self._get_client()
         key = self._key_from_path(path)
         response = await client.head_object(Bucket=self.bucket, Key=key)
         etag = response.get("ETag", "").strip('"')
@@ -197,9 +201,18 @@ class S3Storage(Storage):
             logger.exception("Error handling S3 storage event", path=event.file.path)
 
     async def close(self) -> None:
-        """Close the aiobotocore client."""
-        if self._client is not None:
-            await self._client.close()
+        """Close the aiobotocore client context."""
+        if self._client_ctx is not None:
+            await self._client_ctx.__aexit__(None, None, None)
+            self._client_ctx = None
+            self._client = None
+        elif self._client is not None:
+            # Fallback for tests that inject a bare mock client
+            close = getattr(self._client, "close", None)
+            if close is not None:
+                result = close()
+                if asyncio.iscoroutine(result):
+                    await result
             self._client = None
 
     def _key_from_path(self, path: str) -> str:

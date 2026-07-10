@@ -69,8 +69,9 @@ dev = [
 [project.scripts]
 raggit = "raggit.cli.main:app"
 
-[tool.setuptools]
-packages = ["raggit"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["raggit*"]
 
 [tool.uv]
 default-groups = ["dev"]
@@ -114,6 +115,7 @@ module = [
     "google.oauth2.service_account",
     "azure.storage.blob.aio",
     "azure.storage.blob",
+    "fitz",
 ]
 ignore_missing_imports = true
 

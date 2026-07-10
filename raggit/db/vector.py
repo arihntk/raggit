@@ -73,7 +73,12 @@ class VectorStore:
         return point_id
 
     async def delete_by_document(self, document_id: UUID) -> None:
-        """Delete all vectors for a document."""
+        """Delete all vectors for a document.
+
+        No-op when the collection has not been created yet (first ingest).
+        """
+        if not await self.client.collection_exists(self.collection):
+            return
         await self.client.delete(
             collection_name=self.collection,
             points_selector=Filter(

@@ -126,4 +126,6 @@ def config_file_path() -> Path:
 def get_settings() -> Settings:
     """Return cached settings instance."""
     env_path = config_file_path()
-    return Settings(_env_file=env_path if env_path.exists() else ".env")
+    env_file = env_path if env_path.exists() else Path(".env")
+    # pydantic-settings accepts _env_file at runtime; mypy stubs omit it.
+    return Settings(_env_file=env_file)  # type: ignore[call-arg]

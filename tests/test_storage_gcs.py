@@ -99,14 +99,14 @@ async def test_compute_hash(mock_gcs_client) -> None:
     blob = MagicMock()
     blob.md5_hash = "abc123"
     blob.crc32c = None
+    blob.reload = MagicMock(return_value=None)
     bucket = MagicMock()
     bucket.blob.return_value = blob
     mock_gcs_client.bucket.return_value = bucket
 
     storage = _make_gcs_storage()
-    with patch("asyncio.get_running_loop") as mock_loop:
-        mock_loop.return_value.run_in_executor = AsyncMock(return_value=blob)
-        assert await storage.compute_hash("gs://my-bucket/docs/report.pdf") == "abc123"
+    assert await storage.compute_hash("gs://my-bucket/docs/report.pdf") == "abc123"
+    blob.reload.assert_called_once()
 
 
 async def test_watch_emits_events() -> None:

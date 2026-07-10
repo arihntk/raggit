@@ -60,41 +60,54 @@ def setup(
     """Interactive setup: write configuration to ~/.config/raggit/raggit.env."""
     import os
 
-    from raggit.core.config import config_file_path
+    from raggit.core.config import config_file_path, get_settings
+
+    def _env_value(value: str) -> str:
+        """Quote values that contain whitespace or shell-sensitive characters."""
+        if any(ch in value for ch in (' ', '#', '"', "'", "\\", "\n", "$")):
+            escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
+        return value
 
     config_path = config_file_path()
     env_lines = [
-        f"DATABASE_URL={database_url}",
-        f"QDRANT_URL={qdrant_url}",
+        f"DATABASE_URL={_env_value(database_url)}",
+        f"QDRANT_URL={_env_value(qdrant_url)}",
         "QDRANT_COLLECTION=raggit_chunks",
-        f"STORAGE_SOURCE_TYPE={storage_source_type}",
-        f"STORAGE_URI={storage_uri}",
+        f"STORAGE_SOURCE_TYPE={_env_value(storage_source_type)}",
+        f"STORAGE_URI={_env_value(storage_uri)}",
     ]
     if storage_bucket:
-        env_lines.append(f"STORAGE_BUCKET={storage_bucket}")
+        env_lines.append(f"STORAGE_BUCKET={_env_value(storage_bucket)}")
     if storage_container:
-        env_lines.append(f"STORAGE_CONTAINER={storage_container}")
+        env_lines.append(f"STORAGE_CONTAINER={_env_value(storage_container)}")
     if storage_prefix:
-        env_lines.append(f"STORAGE_PREFIX={storage_prefix}")
+        env_lines.append(f"STORAGE_PREFIX={_env_value(storage_prefix)}")
     if storage_region:
-        env_lines.append(f"STORAGE_REGION={storage_region}")
+        env_lines.append(f"STORAGE_REGION={_env_value(storage_region)}")
     if aws_access_key_id:
-        env_lines.append(f"STORAGE_AWS_ACCESS_KEY_ID={aws_access_key_id}")
+        env_lines.append(f"STORAGE_AWS_ACCESS_KEY_ID={_env_value(aws_access_key_id)}")
     if aws_secret_access_key:
-        env_lines.append(f"STORAGE_AWS_SECRET_ACCESS_KEY={aws_secret_access_key}")
+        env_lines.append(f"STORAGE_AWS_SECRET_ACCESS_KEY={_env_value(aws_secret_access_key)}")
     if gcs_service_account_path:
-        env_lines.append(f"STORAGE_GCS_SERVICE_ACCOUNT_PATH={gcs_service_account_path}")
+        env_lines.append(
+            f"STORAGE_GCS_SERVICE_ACCOUNT_PATH={_env_value(gcs_service_account_path)}"
+        )
     if azure_connection_string:
-        env_lines.append(f"STORAGE_AZURE_CONNECTION_STRING={azure_connection_string}")
+        env_lines.append(
+            f"STORAGE_AZURE_CONNECTION_STRING={_env_value(azure_connection_string)}"
+        )
     env_lines.extend([
-        f"LLM_PROVIDER={llm_provider}",
-        f"LLM_MODEL={llm_model}",
+        f"LLM_PROVIDER={_env_value(llm_provider)}",
+        f"LLM_MODEL={_env_value(llm_model)}",
     ])
     if llm_api_key:
-        env_lines.append(f"LLM_API_KEY={llm_api_key}")
+        env_lines.append(f"LLM_API_KEY={_env_value(llm_api_key)}")
 
     config_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
     os.chmod(config_path, 0o600)
+    # Clear cached settings so subsequent commands pick up the new file.
+    get_settings.cache_clear()
     console.print(f"[green]Configuration written to {config_path}[/green]")
 
 
@@ -119,13 +132,13 @@ async def _ingest(path: Path) -> None:
     storage = create_storage(storage_config)
     indexer = Indexer(storage, config)
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
+    try:
+        async with AsyncSessionLocal() as session, session.begin():
             await indexer.sync_all(session)
-        await session.commit()
-
-    await indexer.close()
-    console.print("[green]Ingestion complete.[/green]")
+        console.print("[green]Ingestion complete.[/green]")
+    finally:
+        await indexer.close()
+        await storage.close()
 
 
 @app.command()
@@ -150,27 +163,25 @@ async def _watch(path: Path | None) -> None:
 
     storage = create_storage(storage_config)
     indexer = Indexer(storage, config)
+    poll_interval = float(storage_config.poll_interval_seconds)
 
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            await indexer.sync_all(session)
-        await session.commit()
+    async with AsyncSessionLocal() as session, session.begin():
+        await indexer.sync_all(session)
 
     async def on_event(event: FileEvent) -> None:
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                if isinstance(event, (FileAddedEvent, FileModifiedEvent)):
-                    await indexer.index_file(session, event.file)
-                elif isinstance(event, FileDeletedEvent):
-                    await indexer.remove_file(session, event.file)
-            await session.commit()
+        async with AsyncSessionLocal() as session, session.begin():
+            if isinstance(event, (FileAddedEvent, FileModifiedEvent)):
+                await indexer.index_file(session, event.file)
+            elif isinstance(event, FileDeletedEvent):
+                await indexer.remove_file(session, event.file)
 
     try:
-        await storage.watch(on_event)
+        await storage.watch(on_event, poll_interval_seconds=poll_interval)
     except KeyboardInterrupt:
         console.print("\n[yellow]Stopping watcher...[/yellow]")
     finally:
         await indexer.close()
+        await storage.close()
 
 
 @app.command()
@@ -219,7 +230,8 @@ async def _query(question: str, top_k: int | None) -> None:
             )
         console.print(table)
 
-        if config.llm.provider and config.llm.api_key:
+        llm_ready = config.llm.provider == "ollama" or bool(config.llm.api_key)
+        if config.llm.provider and llm_ready:
             llm = create_llm(config.llm)
             answer = await augment_and_answer(llm, result)
             console.print("\n[bold cyan]Answer:[/bold cyan]")
@@ -227,7 +239,7 @@ async def _query(question: str, top_k: int | None) -> None:
         else:
             console.print("\n[yellow]No LLM configured; showing retrieved chunks only.[/yellow]")
 
-    await engine.close()
+        await engine.close()
 
 
 @app.command()

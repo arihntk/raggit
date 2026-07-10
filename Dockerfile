@@ -35,9 +35,15 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Create data directory for local storage
 RUN mkdir -p /data/documents
 
-# Copy source for editable-style imports (not strictly needed because package is installed in venv)
+# Package source + migrations for runtime install layout
 COPY raggit ./raggit
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY pyproject.toml ./pyproject.toml
 
-EXPOSE 8000
+# Entrypoint runs migrations then the configured command
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["raggit", "--help"]

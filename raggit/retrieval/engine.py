@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+import math
 from uuid import UUID
 
 from raggit.api.models import Chunk, QueryResult, RetrievedChunk
 from raggit.core.logging import get_logger
+from raggit.db.models import ChunkModel
 from raggit.db.repository import ChunkRepository
 from raggit.db.vector import VectorStore
 from raggit.ingestion.embedder import Embedder
@@ -17,9 +20,14 @@ logger = get_logger("raggit.retrieval.engine")
 
 def _clamp_top_k(total_chunks: int, min_k: int, max_k: int, ratio: float) -> int:
     """Compute dynamic top-k based on corpus size."""
-    import math
-
+    if total_chunks <= 0:
+        return min_k
     return min(max_k, max(min_k, math.floor(total_chunks * ratio)))
+
+
+def _as_uuid(value: UUID | str) -> UUID:
+    """Normalize UUID-like values to UUID."""
+    return value if isinstance(value, UUID) else UUID(str(value))
 
 
 class RetrievalEngine:
@@ -64,17 +72,20 @@ class RetrievalEngine:
             total_chunks=total_chunks,
         )
 
-        # BM25 retrieval
-        bm25_results: list[tuple[Chunk, float]] = []
-        if keyword_query:
-            bm25_results = await self.chunk_repo.bm25_search(keyword_query, limit=top_k * 2)
+        # Run BM25 and semantic retrieval in parallel
+        async def _bm25() -> list[tuple[ChunkModel, float]]:
+            if not keyword_query:
+                return []
+            return await self.chunk_repo.bm25_search(keyword_query, limit=top_k * 2)
 
-        # Semantic retrieval
-        query_vector = (await self.embedder.embed([cleaned_query]))[0]
-        semantic_results = await self.vector_store.search(query_vector, limit=top_k * 2)
+        async def _semantic() -> list[tuple[UUID, UUID, float]]:
+            query_vector = (await self.embedder.embed([cleaned_query]))[0]
+            return await self.vector_store.search(query_vector, limit=top_k * 2)
+
+        bm25_results, semantic_results = await asyncio.gather(_bm25(), _semantic())
 
         # Build ranked lists of chunk IDs
-        bm25_ranked = [UUID(chunk.id) for chunk, _ in bm25_results]
+        bm25_ranked = [_as_uuid(chunk.id) for chunk, _ in bm25_results]
         semantic_ranked = [chunk_id for _, chunk_id, _ in semantic_results]
 
         # RRF fusion

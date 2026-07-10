@@ -45,8 +45,12 @@ class _AsyncIterator:
 def mock_s3_client():
     client = MagicMock()
     client.exceptions.ClientError = Exception
+    # aiobotocore create_client returns an async context manager
+    client_ctx = MagicMock()
+    client_ctx.__aenter__ = AsyncMock(return_value=client)
+    client_ctx.__aexit__ = AsyncMock(return_value=None)
     with patch("aiobotocore.session.get_session") as mock_session:
-        mock_session.return_value.create_client.return_value = client
+        mock_session.return_value.create_client.return_value = client_ctx
         yield client
 
 

@@ -55,7 +55,8 @@ class SentenceTransformerEmbedder(Embedder):
                 show_progress_bar=False,
             ),
         )
-        return embeddings.tolist()
+        result: list[list[float]] = embeddings.tolist()
+        return result
 
     @property
     def model_name(self) -> str:
@@ -100,6 +101,9 @@ class OpenAIEmbedder(Embedder):
                 # Sort by index to preserve order
                 data.sort(key=lambda item: item["index"])
                 results.extend([item["embedding"] for item in data])
+
+        if results and self._vector_size is None:
+            self._vector_size = len(results[0])
 
         return results
 

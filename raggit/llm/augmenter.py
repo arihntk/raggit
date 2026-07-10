@@ -38,13 +38,20 @@ def build_augmented_prompt(result: QueryResult) -> str:
 
 
 async def augment_and_answer(
-    llm,
+    llm: object,
     result: QueryResult,
     system_prompt: str | None = None,
 ) -> str:
     """Augment retrieved chunks with the query and ask the LLM."""
+    from raggit.llm.base import LLMProvider
+
+    if not isinstance(llm, LLMProvider):
+        msg = f"Expected LLMProvider, got {type(llm).__name__}"
+        raise TypeError(msg)
+
     user_prompt = build_augmented_prompt(result)
-    return await llm.generate(
+    answer = await llm.generate(
         system_prompt=system_prompt or SYSTEM_PROMPT,
         user_prompt=user_prompt,
     )
+    return str(answer)

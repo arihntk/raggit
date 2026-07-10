@@ -134,16 +134,20 @@ class GCSStorage(Storage):
         return await loop.run_in_executor(None, blob.exists)
 
     async def compute_hash(self, path: str) -> str:
-        """Return the blob MD5 hash or CRC32C as a stable hash."""
+        """Return the blob MD5 hash or CRC32C as a stable hash.
+
+        ``blob.reload()`` mutates the blob in place and returns None, so we
+        read hash fields from the blob after reload completes.
+        """
         loop = asyncio.get_running_loop()
         bucket = self._get_bucket()
         name = self._name_from_path(path)
         blob = bucket.blob(name)
-        metadata = await loop.run_in_executor(None, blob.reload)
-        if metadata.md5_hash:
-            return cast(str, metadata.md5_hash)
-        if metadata.crc32c:
-            return cast(str, metadata.crc32c)
+        await loop.run_in_executor(None, blob.reload)
+        if blob.md5_hash:
+            return cast(str, blob.md5_hash)
+        if blob.crc32c:
+            return cast(str, blob.crc32c)
         return await self._compute_sha256(path)
 
     async def _compute_sha256(self, path: str) -> str:

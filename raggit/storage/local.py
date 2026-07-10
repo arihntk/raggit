@@ -6,9 +6,11 @@ import asyncio
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from watchdog.events import (
     DirCreatedEvent,
+    DirDeletedEvent,
     FileSystemEvent,
     FileSystemEventHandler,
 )
@@ -37,14 +39,45 @@ def _is_supported(path: Path) -> bool:
     return path.suffix.lower() in SUPPORTED_EXTENSIONS
 
 
+def _event_path(event: FileSystemEvent) -> Path:
+    """Normalize a watchdog event path to Path."""
+    src = event.src_path
+    if isinstance(src, bytes):
+        src = src.decode("utf-8", errors="replace")
+    return Path(src)
+
+
 def _to_storage_file(path: Path, root: Path) -> StorageFile:
-    """Convert a Path to a StorageFile."""
+    """Convert a Path to a StorageFile (file must exist)."""
     stat = path.stat()
     return StorageFile(
         path=str(path.resolve()),
         relative_path=str(path.relative_to(root)),
         size=stat.st_size,
         modified_at=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
+        content_hash=None,
+    )
+
+
+def _to_deleted_storage_file(path: Path, root: Path) -> StorageFile:
+    """Build a StorageFile for a path that no longer exists on disk."""
+    try:
+        # resolve(strict=False) works for missing paths on modern Python
+        resolved = path if path.is_absolute() else (root / path).resolve()
+        try:
+            relative = str(resolved.relative_to(root))
+        except ValueError:
+            relative = path.name
+        path_str = str(resolved)
+    except OSError:
+        path_str = str(path)
+        relative = path.name
+
+    return StorageFile(
+        path=path_str,
+        relative_path=relative,
+        size=0,
+        modified_at=datetime.now(UTC),
         content_hash=None,
     )
 
@@ -65,10 +98,14 @@ class _LocalEventHandler(FileSystemEventHandler):
     def on_created(self, event: FileSystemEvent) -> None:
         if isinstance(event, DirCreatedEvent):
             return
-        path = Path(event.src_path)
+        path = _event_path(event)
         if not _is_supported(path):
             return
-        file = _to_storage_file(path, self.root)
+        try:
+            file = _to_storage_file(path, self.root)
+        except OSError:
+            logger.warning("Could not stat created file", path=str(path))
+            return
         self.loop.call_soon_threadsafe(
             lambda: asyncio.create_task(self._emit(FileAddedEvent(file)))
         )
@@ -76,21 +113,26 @@ class _LocalEventHandler(FileSystemEventHandler):
     def on_modified(self, event: FileSystemEvent) -> None:
         if isinstance(event, DirCreatedEvent):
             return
-        path = Path(event.src_path)
+        path = _event_path(event)
         if not _is_supported(path):
             return
-        file = _to_storage_file(path, self.root)
+        try:
+            file = _to_storage_file(path, self.root)
+        except OSError:
+            logger.warning("Could not stat modified file", path=str(path))
+            return
         self.loop.call_soon_threadsafe(
             lambda: asyncio.create_task(self._emit(FileModifiedEvent(file)))
         )
 
     def on_deleted(self, event: FileSystemEvent) -> None:
-        if isinstance(event, DirCreatedEvent):
+        if isinstance(event, (DirCreatedEvent, DirDeletedEvent)):
             return
-        path = Path(event.src_path)
+        path = _event_path(event)
         if not _is_supported(path):
             return
-        file = _to_storage_file(path, self.root)
+        # Do not call stat() — the file is already gone.
+        file = _to_deleted_storage_file(path, self.root)
         self.loop.call_soon_threadsafe(
             lambda: asyncio.create_task(self._emit(FileDeletedEvent(file)))
         )
@@ -110,7 +152,15 @@ class LocalStorage(Storage):
     def __init__(self, root_path: str) -> None:
         self.root = Path(root_path).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
-        self._observer: Observer | None = None
+        self._observer: Any | None = None
+
+    def _resolve_safe(self, path: str) -> Path:
+        """Resolve a path and ensure it stays within the storage root."""
+        resolved = Path(path).expanduser().resolve()
+        if not resolved.is_relative_to(self.root):
+            msg = f"Path is outside storage root: {path}"
+            raise PermissionError(msg)
+        return resolved
 
     async def list_files(self) -> list[StorageFile]:
         """Recursively list all supported files under root."""
@@ -121,12 +171,15 @@ class LocalStorage(Storage):
         return files
 
     async def read_file(self, path: str) -> bytes:
-        """Read file bytes."""
-        return Path(path).read_bytes()
+        """Read file bytes, rejecting paths outside the storage root."""
+        return self._resolve_safe(path).read_bytes()
 
     async def file_exists(self, path: str) -> bool:
-        """Check file existence."""
-        return Path(path).is_file()
+        """Check file existence within the storage root."""
+        try:
+            return self._resolve_safe(path).is_file()
+        except PermissionError:
+            return False
 
     async def compute_hash(self, path: str) -> str:
         """Compute SHA-256 hash of file contents."""

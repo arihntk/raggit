@@ -52,4 +52,4 @@ class OpenAIProvider(LLMProvider):
             response = await client.post("/chat/completions", json=payload)
             response.raise_for_status()
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            return str(data["choices"][0]["message"]["content"])

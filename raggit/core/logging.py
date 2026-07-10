@@ -42,4 +42,5 @@ def configure_logging(log_level: str = "INFO") -> None:
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Return a structured logger."""
-    return structlog.get_logger(name)
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
+    return logger

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from raggit.api.models import DocumentStatus
+from raggit.api.models import DocumentStatus, SourceType
 from raggit.db.models import ChunkModel, DocumentModel, LogModel
 
 
@@ -45,19 +45,23 @@ class DocumentRepository:
 
     async def upsert(
         self,
-        source_type: str,
+        source_type: SourceType | str,
         source_uri: str,
         filename: str,
         content_hash: str | None = None,
         status: DocumentStatus = DocumentStatus.PENDING,
     ) -> DocumentModel:
         """Insert or re-activate a document."""
+        if isinstance(source_type, str):
+            source_type = SourceType(source_type)
+
         existing = await self.get_by_uri(source_uri)
         if existing:
             existing.status = status
             existing.error_message = None
             existing.deleted_at = None
-            existing.content_hash = content_hash
+            if content_hash is not None:
+                existing.content_hash = content_hash
             existing.filename = filename
             await self.session.flush()
             return existing
@@ -91,7 +95,7 @@ class DocumentRepository:
         await self.session.execute(
             update(DocumentModel)
             .where(DocumentModel.id == str(document_id))
-            .values(status=DocumentStatus.DELETED)
+            .values(status=DocumentStatus.DELETED, deleted_at=func.now())
         )
 
     async def hard_delete(self, document_id: UUID) -> None:
@@ -155,8 +159,8 @@ class ChunkRepository:
 
     async def count_all(self) -> int:
         """Count total chunks in the index."""
-        result = await self.session.execute(select(ChunkModel.id))
-        return len(result.scalars().all())
+        result = await self.session.execute(select(func.count()).select_from(ChunkModel))
+        return int(result.scalar_one())
 
     async def bm25_search(self, query: str, limit: int = 50) -> list[tuple[ChunkModel, float]]:
         """Execute a BM25-ish full-text search against chunk content.
