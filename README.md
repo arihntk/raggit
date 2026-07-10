@@ -78,6 +78,7 @@ flowchart TB
 - **Vector Store:** Qdrant
 - **Infra:** Docker Compose
 - **CLI:** `typer` + `rich`
+- **Storage:** Local filesystem, S3, GCS, Azure Blob (optional extras)
 - **ORM/Migrations:** SQLAlchemy 2.0 + Alembic
 
 ---
@@ -244,8 +245,8 @@ uv run raggit watch ./data/documents
 
 | Command | Description |
 |---|---|
-| `raggit setup` | Interactive configuration |
-| `raggit ingest <path>` | One-time ingestion |
+| `raggit setup` | Interactive configuration (local, S3, GCS, Azure) |
+| `raggit ingest <path>` | One-time ingestion (path is optional for cloud storage) |
 | `raggit watch <path>` | Continuously watch and index |
 | `raggit query "<question>"` | Ask a question |
 | `raggit status` | Show indexed document status |
@@ -296,8 +297,16 @@ Key variables:
 | `DATABASE_URL` | `postgresql+asyncpg://raggit:raggit@localhost:5433/raggit` | PostgreSQL connection |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant URL |
 | `QDRANT_COLLECTION` | `raggit_chunks` | Qdrant collection name |
-| `STORAGE_SOURCE_TYPE` | `local` | Storage backend |
-| `STORAGE_URI` | `./data/documents` | Local document path |
+| `STORAGE_SOURCE_TYPE` | `local` | Storage backend: `local`, `s3`, `gcs`, `azure_blob` |
+| `STORAGE_URI` | `./data/documents` | Storage URI or local path |
+| `STORAGE_BUCKET` | `None` | S3/GCS bucket name |
+| `STORAGE_CONTAINER` | `None` | Azure container name |
+| `STORAGE_PREFIX` | `None` | Object prefix / folder |
+| `STORAGE_REGION` | `None` | S3 region |
+| `STORAGE_AWS_ACCESS_KEY_ID` | `None` | AWS access key ID |
+| `STORAGE_AWS_SECRET_ACCESS_KEY` | `None` | AWS secret access key |
+| `STORAGE_GCS_SERVICE_ACCOUNT_PATH` | `None` | GCS service account JSON path |
+| `STORAGE_AZURE_CONNECTION_STRING` | `None` | Azure Blob connection string |
 | `LLM_PROVIDER` | `openai` | LLM provider |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |
 | `LLM_API_KEY` | `None` | API key |
