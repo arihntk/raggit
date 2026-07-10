@@ -17,7 +17,7 @@ from raggit.ingestion.indexer import Indexer
 from raggit.llm.augmenter import augment_and_answer
 from raggit.llm.factory import create_llm
 from raggit.retrieval.engine import RetrievalEngine
-from raggit.storage.base import FileAddedEvent, FileDeletedEvent, FileModifiedEvent
+from raggit.storage.base import FileAddedEvent, FileDeletedEvent, FileEvent, FileModifiedEvent
 from raggit.storage.factory import create_storage
 
 app = typer.Typer(
@@ -41,12 +41,25 @@ def setup(
         help="PostgreSQL connection URL",
     ),
     qdrant_url: str = typer.Option("http://localhost:6333", help="Qdrant URL"),
-    storage_uri: str = typer.Option("./data/documents", help="Local document directory"),
+    storage_source_type: str = typer.Option(
+        "local", help="Storage backend: local, s3, gcs, azure_blob"
+    ),
+    storage_uri: str = typer.Option("./data/documents", help="Storage URI or path"),
+    storage_bucket: str | None = typer.Option(None, help="S3/GCS bucket name"),
+    storage_container: str | None = typer.Option(None, help="Azure container name"),
+    storage_prefix: str | None = typer.Option(None, help="Object prefix / folder"),
+    storage_region: str | None = typer.Option(None, help="S3 region"),
+    aws_access_key_id: str | None = typer.Option(None, help="AWS access key ID"),
+    aws_secret_access_key: str | None = typer.Option(None, help="AWS secret access key"),
+    gcs_service_account_path: str | None = typer.Option(None, help="GCS service account JSON path"),
+    azure_connection_string: str | None = typer.Option(None, help="Azure Blob connection string"),
     llm_provider: str = typer.Option("openai", help="LLM provider: openai or ollama"),
     llm_model: str = typer.Option("gpt-4o-mini", help="LLM model name"),
     llm_api_key: str | None = typer.Option(None, help="LLM API key"),
 ) -> None:
     """Interactive setup: write configuration to ~/.config/raggit/raggit.env."""
+    import os
+
     from raggit.core.config import config_file_path
 
     config_path = config_file_path()
@@ -54,15 +67,34 @@ def setup(
         f"DATABASE_URL={database_url}",
         f"QDRANT_URL={qdrant_url}",
         "QDRANT_COLLECTION=raggit_chunks",
-        "STORAGE_SOURCE_TYPE=local",
+        f"STORAGE_SOURCE_TYPE={storage_source_type}",
         f"STORAGE_URI={storage_uri}",
+    ]
+    if storage_bucket:
+        env_lines.append(f"STORAGE_BUCKET={storage_bucket}")
+    if storage_container:
+        env_lines.append(f"STORAGE_CONTAINER={storage_container}")
+    if storage_prefix:
+        env_lines.append(f"STORAGE_PREFIX={storage_prefix}")
+    if storage_region:
+        env_lines.append(f"STORAGE_REGION={storage_region}")
+    if aws_access_key_id:
+        env_lines.append(f"STORAGE_AWS_ACCESS_KEY_ID={aws_access_key_id}")
+    if aws_secret_access_key:
+        env_lines.append(f"STORAGE_AWS_SECRET_ACCESS_KEY={aws_secret_access_key}")
+    if gcs_service_account_path:
+        env_lines.append(f"STORAGE_GCS_SERVICE_ACCOUNT_PATH={gcs_service_account_path}")
+    if azure_connection_string:
+        env_lines.append(f"STORAGE_AZURE_CONNECTION_STRING={azure_connection_string}")
+    env_lines.extend([
         f"LLM_PROVIDER={llm_provider}",
         f"LLM_MODEL={llm_model}",
-    ]
+    ])
     if llm_api_key:
         env_lines.append(f"LLM_API_KEY={llm_api_key}")
 
     config_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+    os.chmod(config_path, 0o600)
     console.print(f"[green]Configuration written to {config_path}[/green]")
 
 
@@ -124,7 +156,7 @@ async def _watch(path: Path | None) -> None:
             await indexer.sync_all(session)
         await session.commit()
 
-    async def on_event(event):
+    async def on_event(event: FileEvent) -> None:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 if isinstance(event, (FileAddedEvent, FileModifiedEvent)):

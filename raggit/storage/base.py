@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -38,7 +38,7 @@ class FileDeletedEvent(FileEvent):
     """Emitted when a file is removed."""
 
 
-FileEventCallback = Callable[[FileEvent], None]
+FileEventCallback = Callable[[FileEvent], Awaitable[None]]
 
 
 class Storage(ABC):
@@ -57,6 +57,10 @@ class Storage(ABC):
     @abstractmethod
     async def file_exists(self, path: str) -> bool:
         """Return True if the file exists in storage."""
+
+    @abstractmethod
+    async def compute_hash(self, path: str) -> str:
+        """Compute a stable hash for the file contents."""
 
     @abstractmethod
     async def watch(

@@ -59,6 +59,14 @@ class Settings(BaseSettings):
     # Storage
     storage_source_type: str = "local"
     storage_uri: str = "./data/documents"
+    storage_bucket: str | None = None
+    storage_container: str | None = None
+    storage_prefix: str | None = None
+    storage_region: str | None = None
+    storage_aws_access_key_id: str | None = None
+    storage_aws_secret_access_key: str | None = None
+    storage_gcs_service_account_path: str | None = None
+    storage_azure_connection_string: str | None = None
     storage_poll_interval_seconds: int = 30
 
     @property
@@ -94,6 +102,14 @@ class Settings(BaseSettings):
             storage=StorageConfig(
                 source_type=SourceType(self.storage_source_type),
                 uri=self.storage_uri,
+                bucket=self.storage_bucket,
+                container=self.storage_container,
+                prefix=self.storage_prefix,
+                region=self.storage_region,
+                aws_access_key_id=self.storage_aws_access_key_id,
+                aws_secret_access_key=self.storage_aws_secret_access_key,
+                gcs_service_account_path=self.storage_gcs_service_account_path,
+                azure_connection_string=self.storage_azure_connection_string,
                 poll_interval_seconds=self.storage_poll_interval_seconds,
             ),
         )

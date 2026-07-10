@@ -88,6 +88,14 @@ class StorageConfig(BaseModel):
 
     source_type: SourceType
     uri: str
+    bucket: str | None = None
+    container: str | None = None
+    prefix: str | None = None
+    region: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    gcs_service_account_path: str | None = None
+    azure_connection_string: str | None = None
     poll_interval_seconds: int = 30
 
 

@@ -117,11 +117,88 @@ uv run alembic upgrade head
 
 ### 5. Configure raggit
 
+#### Local storage (default)
+
 ```bash
 uv run raggit setup \
   --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
   --qdrant-url http://localhost:6333 \
+  --storage-source-type local \
   --storage-uri ./data/documents \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY
+```
+
+#### AWS S3
+
+Install the S3 extra first:
+
+```bash
+uv pip install 'raggit[s3]'
+```
+
+Then run setup:
+
+```bash
+uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type s3 \
+  --storage-uri s3://my-bucket/documents \
+  --storage-bucket my-bucket \
+  --storage-prefix documents \
+  --storage-region us-east-1 \
+  --aws-access-key-id $AWS_ACCESS_KEY_ID \
+  --aws-secret-access-key $AWS_SECRET_ACCESS_KEY \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY
+```
+
+#### Google Cloud Storage
+
+Install the GCS extra first:
+
+```bash
+uv pip install 'raggit[gcs]'
+```
+
+Then run setup:
+
+```bash
+uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type gcs \
+  --storage-uri gs://my-bucket/documents \
+  --storage-bucket my-bucket \
+  --storage-prefix documents \
+  --gcs-service-account-path /path/to/service-account.json \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY
+```
+
+#### Azure Blob Storage
+
+Install the Azure extra first:
+
+```bash
+uv pip install 'raggit[azure]'
+```
+
+Then run setup:
+
+```bash
+uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type azure_blob \
+  --storage-uri azure://my-container/documents \
+  --storage-container my-container \
+  --storage-prefix documents \
+  --azure-connection-string $AZURE_STORAGE_CONNECTION_STRING \
   --llm-provider openai \
   --llm-model gpt-4o-mini \
   --llm-api-key $OPENAI_API_KEY
@@ -129,10 +206,18 @@ uv run raggit setup \
 
 ### 6. Add documents and ingest
 
+For local storage:
+
 ```bash
 mkdir -p data/documents
 cp my-docs/*.pdf data/documents/
 uv run raggit ingest ./data/documents
+```
+
+For cloud storage, upload documents to the configured bucket/container and run:
+
+```bash
+uv run raggit ingest
 ```
 
 ### 7. Ask questions
@@ -142,6 +227,12 @@ uv run raggit query "What is raggit?"
 ```
 
 ### 8. Run the watcher (continuous indexing)
+
+```bash
+uv run raggit watch
+```
+
+For local storage you can override the path:
 
 ```bash
 uv run raggit watch ./data/documents
