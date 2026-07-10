@@ -9,7 +9,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from raggit.api.models import RAGConfig
+from raggit.api.models import QueryFilters, QueryRewriteMode, RAGConfig
 from raggit.core.config import get_settings
 from raggit.core.logging import configure_logging, get_logger
 from raggit.db.session import AsyncSessionLocal
@@ -106,7 +106,6 @@ def setup(
 
     config_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
     os.chmod(config_path, 0o600)
-    # Clear cached settings so subsequent commands pick up the new file.
     get_settings.cache_clear()
     console.print(f"[green]Configuration written to {config_path}[/green]")
 
@@ -188,56 +187,123 @@ async def _watch(path: Path | None) -> None:
 def query(
     question: str = typer.Argument(..., help="Question to ask"),
     top_k: int | None = typer.Option(None, help="Override top-k"),
+    source_prefix: str | None = typer.Option(None, help="Filter by source URI prefix"),
+    filename_prefix: str | None = typer.Option(None, help="Filter by filename prefix"),
+    tenant: str | None = typer.Option(None, help="Filter by tenant id"),
+    tag: list[str] | None = typer.Option(None, help="Filter by tag (repeatable)"),  # noqa: B008
+    min_score: float | None = typer.Option(None, help="Drop chunks below this score"),
+    rewrite: QueryRewriteMode = typer.Option(QueryRewriteMode.NONE, help="Query rewrite mode"),  # noqa: B008
 ) -> None:
     """Ask a question against the indexed documents."""
-    asyncio.run(_query(question, top_k))
+    asyncio.run(
+        _query(
+            question,
+            top_k,
+            source_prefix=source_prefix,
+            filename_prefix=filename_prefix,
+            tenant=tenant,
+            tags=tag or [],
+            min_score=min_score,
+            rewrite=rewrite,
+        )
+    )
 
 
-async def _query(question: str, top_k: int | None) -> None:
+async def _query(
+    question: str,
+    top_k: int | None,
+    *,
+    source_prefix: str | None = None,
+    filename_prefix: str | None = None,
+    tenant: str | None = None,
+    tags: list[str] | None = None,
+    min_score: float | None = None,
+    rewrite: QueryRewriteMode = QueryRewriteMode.NONE,
+) -> None:
     config = _get_config()
     configure_logging(config.log_level)
 
-    from raggit.db.repository import ChunkRepository
+    from raggit.db.repository import ChunkRepository, DocumentRepository
     from raggit.db.vector import VectorStore
     from raggit.ingestion.embedder import create_embedder
+
+    if min_score is not None:
+        config.retrieval.min_score = min_score
+    if top_k is not None:
+        config.retrieval.min_top_k = top_k
+        config.retrieval.max_top_k = top_k
+        config.retrieval.top_k_ratio = 0.0
+    config.retrieval.query_rewrite = rewrite
+
+    filters = QueryFilters(
+        source_uri_prefix=source_prefix,
+        filename_prefix=filename_prefix,
+        tenant_id=tenant,
+        tags=tags or [],
+    )
 
     embedder = create_embedder(config.embedding)
     vector_store = VectorStore(config)
 
+    # Prefer active embedding collection if recorded
     async with AsyncSessionLocal() as session:
+        from raggit.db.repository import EmbeddingCollectionRepository
+
+        active = await EmbeddingCollectionRepository(session).get_active()
+        if active is not None:
+            vector_store.set_collection(active.name)
+
         chunk_repo = ChunkRepository(session)
+        doc_repo = DocumentRepository(session)
+
+        llm = None
+        llm_ready = config.llm.provider == "ollama" or bool(config.llm.api_key)
+        if config.llm.provider and llm_ready:
+            llm = create_llm(config.llm)
+
         engine = RetrievalEngine(
             embedder=embedder,
             vector_store=vector_store,
             chunk_repo=chunk_repo,
-            min_top_k=top_k if top_k is not None else config.min_top_k,
-            max_top_k=top_k if top_k is not None else config.max_top_k,
-            top_k_ratio=0.0 if top_k is not None else config.top_k_ratio,
-            rrf_k=config.rrf_k,
+            document_repo=doc_repo,
+            config=config,
+            llm=llm,
         )
 
-        result = await engine.retrieve(question)
+        result = await engine.retrieve(question, filters=filters)
 
         table = Table(title="Retrieved Chunks")
         table.add_column("Rank", justify="right")
         table.add_column("Score", justify="right")
+        table.add_column("Source")
         table.add_column("Chunk")
         for rank, retrieved in enumerate(result.chunks, start=1):
+            source = retrieved.chunk.filename or retrieved.chunk.source_uri or ""
             table.add_row(
                 str(rank),
                 f"{retrieved.score:.4f}",
-                retrieved.chunk.cleaned_content[:300],
+                source[:40],
+                retrieved.chunk.cleaned_content[:200],
             )
         console.print(table)
 
-        llm_ready = config.llm.provider == "ollama" or bool(config.llm.api_key)
-        if config.llm.provider and llm_ready:
-            llm = create_llm(config.llm)
-            answer = await augment_and_answer(llm, result)
+        if result.refused and not llm:
+            console.print(f"\n[yellow]Refused:[/yellow] {result.refusal_reason}")
+        elif llm is not None:
+            result = await augment_and_answer(llm, result, safety=config.safety)
             console.print("\n[bold cyan]Answer:[/bold cyan]")
-            console.print(answer)
+            console.print(result.answer or "")
+            if result.grounded is False:
+                console.print("[yellow]Groundedness check failed[/yellow]")
         else:
             console.print("\n[yellow]No LLM configured; showing retrieved chunks only.[/yellow]")
+            if result.citations:
+                console.print("\n[bold]Citations:[/bold]")
+                for i, cite in enumerate(result.citations, start=1):
+                    console.print(
+                        f"  [{i}] {cite.filename or cite.source_uri} "
+                        f"chunk={cite.chunk_index} id={cite.chunk_id}"
+                    )
 
         await engine.close()
 
@@ -249,20 +315,42 @@ def status() -> None:
 
 
 async def _status() -> None:
-    from raggit.db.repository import DocumentRepository
+    from raggit.db.repository import DocumentRepository, EmbeddingCollectionRepository
 
     async with AsyncSessionLocal() as session:
         repo = DocumentRepository(session)
         docs = await repo.list_all()
+        collections = await EmbeddingCollectionRepository(session).list_all()
 
     table = Table(title="Document Index Status")
     table.add_column("Filename")
     table.add_column("Status")
+    table.add_column("Tenant")
     table.add_column("Updated")
     for doc in docs:
-        table.add_row(doc.filename, doc.status.value, str(doc.updated_at))
+        table.add_row(
+            doc.filename,
+            doc.status.value,
+            doc.tenant_id or "",
+            str(doc.updated_at),
+        )
     console.print(table)
     console.print(f"Total documents: {len(docs)}")
+
+    if collections:
+        ctable = Table(title="Embedding Collections")
+        ctable.add_column("Name")
+        ctable.add_column("Model")
+        ctable.add_column("Dim")
+        ctable.add_column("Active")
+        for coll in collections:
+            ctable.add_row(
+                coll.name,
+                coll.embedding_model,
+                str(coll.vector_size),
+                "yes" if coll.is_active else "no",
+            )
+        console.print(ctable)
 
 
 if __name__ == "__main__":
