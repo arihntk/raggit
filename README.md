@@ -12,62 +12,102 @@ raggit connects directly to local and remote object storage, automatically index
 flowchart TB
     subgraph Storage
         LS[Local Filesystem]
-        RS[S3 / GCS / Azure]
+        RS[S3 / GCS / Azure Blob]
     end
 
     W[Watcher Service]
     I[Indexing Service]
-    P[Parser]
-    C[Recursive Chunker]
+    P[Parser Registry]
+    FA[Format-Aware Chunker]
+    DED[Dedup]
     CL[Chunk Cleaner]
-    E[Embedding Service]
+    PI[PII Redaction]
+    IH[Injection Hardening]
+    E[Embedder]
     VS[Qdrant Vector Store]
 
     W --> I
     I --> P
-    P --> C
-    C --> CL
-    CL --> E
+    P --> FA
+    FA --> DED
+    DED --> CL
+    CL --> PI
+    PI --> IH
+    IH --> E
     E --> VS
 
     subgraph PostgreSQL
         D[documents]
         CH[chunks]
+        EC[embedding_collections]
         LG[logs]
     end
 
     I --> D
-    CL --> CH
+    IH --> CH
     E --> CH
+    I --> EC
 
     Q[User Query] --> QS[Query Sanitizer]
-    QS --> BM25[Postgres FTS / BM25]
-    QS --> SEM[Qdrant Semantic Search]
-    BM25 --> RRF[RRF Reranker]
+    QR[Query Rewriter]
+    QR --> MQ[Multi-Query]
+    QR --> HY[HyDE]
+
+    Q --> QR
+    QR --> BM25[Postgres FTS / BM25]
+    QR --> SEM[Qdrant Semantic Search]
+    BM25 --> RRF[Weighted RRF]
     SEM --> RRF
-    RRF --> DK[Dynamic Top-K]
-    DK --> AUG[Augmenter]
+    RRF --> RR[Cross-Encoder Reranker]
+    RR --> TH[Score Threshold]
+    TH --> PW[Parent-Window Expansion]
+    PW --> AUG[Augmenter]
     AUG --> LLM[LLM Provider]
+    LLM --> GRD[Groundedness Check]
+    GRD --> OUT[Answer + Citations]
+
+    IH --> LG
+    E --> LG
+    RRF --> LG
+    AUG --> LG
+    LLM --> LG
 ```
 
 ### Ingestion Pipeline
 
-1. **Watch** local filesystem or remote object storage for changes
-2. **Parse** PDF, DOCX, HTML, Markdown, and plain text
-3. **Chunk** text recursively with configurable size/overlap
-4. **Clean** chunks (normalize unicode, collapse whitespace, fix hyphenation)
-5. **Embed** chunks using local sentence-transformers or OpenAI-compatible API
-6. **Store** vectors in Qdrant and metadata/links in PostgreSQL
+1. **Watch** local filesystem or remote object storage for changes.
+2. **Parse** PDF, DOCX, HTML, Markdown, and plain text. PDF pages are marked explicitly so page numbers survive chunking.
+3. **Chunk** in a format-aware way:
+   - Markdown by headers
+   - Code by top-level definitions
+   - PDF by page markers
+   - Fallback recursive character splitting
+4. **Size** chunks by tokens (`tiktoken` cl100k_base when available) with configurable overlap.
+5. **Dedup** near-identical chunks using content hash + Jaccard word-set similarity.
+6. **Clean** chunks (normalize unicode, collapse whitespace, fix hyphenation).
+7. **Redact PII** (optional) and **harden** against prompt-injection patterns before embedding.
+8. **Embed** chunks using local sentence-transformers or an OpenAI-compatible API.
+9. **Store** vectors in a model-scoped Qdrant collection and metadata/links in PostgreSQL.
+10. **Audit** every ingestion input/output to the Postgres `logs` table.
 
 ### Retrieval Pipeline
 
-1. **Sanitize** the query to extract keywords
-2. **BM25** keyword search via PostgreSQL full-text search
-3. **Semantic** similarity search via Qdrant
-4. **RRF** reranking of combined results
-5. **Dynamic top-k** based on total corpus size
-6. **Augment** the prompt with original query, keywords, and retrieved chunks
-7. **Generate** an answer via OpenAI-compatible API or Ollama
+1. **Sanitize** the query to extract keywords.
+2. **Rewrite** the query when configured:
+   - `multi_query`: generate alternative phrasings for broader recall
+   - `hyde`: generate a hypothetical answer passage to embed
+3. **Filter** BM25 and semantic searches by metadata: source URI prefix, filename prefix, tenant, tags, document ids, date range.
+4. **BM25** keyword search via PostgreSQL full-text search (`tsvector` GIN index).
+5. **Semantic** similarity search via Qdrant cosine distance.
+6. **Fuse** ranked lists with weighted Reciprocal Rank Fusion (tunable BM25/semantic weights).
+7. **Rerank** top-N candidates with an optional cross-encoder (e.g. `BAAI/bge-reranker-base`).
+8. **Threshold** low-confidence chunks with `min_score` and refuse empty/low-score retrieval.
+9. **Expand** parent-document windows around each hit when `parent_window > 0`.
+10. **Cite** every chunk with id, source URI, filename, page, section, offsets, score, and excerpt.
+11. **Augment** the prompt with isolated untrusted-context wrappers and system instructions.
+12. **Generate** an answer via OpenAI-compatible API or Ollama.
+13. **Check** groundedness and warn if the answer is not supported by retrieved context.
+14. **Audit** the query, retrieval result, and final answer to the Postgres `logs` table.
 
 ---
 
@@ -77,7 +117,8 @@ flowchart TB
 - **Database:** PostgreSQL 16+ (metadata, chunks, logs)
 - **Vector Store:** Qdrant
 - **Infra:** Docker Compose
-- **CLI:** `typer` + `rich`
+- **CLI:** `typer` + `rich` (progress bars, panels, citation trees)
+- **Logging:** `structlog` console logs + Postgres `logs` table for structured audit events
 - **Storage:** Local filesystem, S3, GCS, Azure Blob (optional extras)
 - **ORM/Migrations:** SQLAlchemy 2.0 + Alembic
 
@@ -246,10 +287,12 @@ uv run raggit watch ./data/documents
 | Command | Description |
 |---|---|
 | `raggit setup` | Interactive configuration (local, S3, GCS, Azure) |
-| `raggit ingest <path>` | One-time ingestion (path is optional for cloud storage) |
-| `raggit watch <path>` | Continuously watch and index |
-| `raggit query "<question>"` | Ask a question |
-| `raggit status` | Show indexed document status |
+| `raggit ingest <path>` | One-time ingestion with a progress bar (path is optional for cloud storage) |
+| `raggit watch <path>` | Continuously watch and index with live event indicators |
+| `raggit query "<question>"` | Ask a question; shows status spinners, chunk table, answer panel, and citation tree |
+| `raggit status` | Show indexed document status and active embedding collections |
+
+Query supports `--top-k`, `--source-prefix`, `--filename-prefix`, `--tenant`, `--tag`, `--min-score`, and `--rewrite`.
 
 ---
 
