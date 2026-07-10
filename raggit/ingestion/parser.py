@@ -48,12 +48,13 @@ class PDFParser(Parser):
     supported_extensions = {".pdf"}
 
     def parse(self, content: bytes, filename: str = "") -> str:
-        """Extract text from PDF bytes."""
+        """Extract text from PDF bytes with explicit page markers."""
         try:
             doc = fitz.open(stream=content, filetype="pdf")
             parts: list[str] = []
-            for page in doc:
-                parts.append(page.get_text())
+            for page_num, page in enumerate(doc, start=1):
+                text = page.get_text()
+                parts.append(f"--- Page {page_num} ---\n{text}")
             doc.close()
             return "\n\n".join(parts)
         except Exception as exc:

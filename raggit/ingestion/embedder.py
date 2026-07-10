@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import Any
 
 import httpx
 import numpy as np
@@ -14,17 +16,48 @@ from raggit.core.logging import get_logger
 logger = get_logger("raggit.ingestion.embedder")
 
 
+def collection_name_for_model(
+    base: str,
+    model: str,
+    version: str | None,
+    vector_size: int,
+) -> str:
+    """Build a deterministic Qdrant collection name for an embedding model."""
+    import re
+
+    safe_model = re.sub(r"[^a-zA-Z0-9_-]+", "_", model).strip("_").lower()
+    suffix = f"{safe_model}_{vector_size}"
+    if version:
+        safe_version = re.sub(r"[^a-zA-Z0-9_-]+", "_", version).strip("_").lower()
+        suffix = f"{safe_model}_{safe_version}_{vector_size}"
+    return f"{base}_{suffix}"
+
+
 class Embedder(ABC):
     """Abstract embedding provider."""
 
     @abstractmethod
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        progress_callback: Callable[[int, int], Any] | None = None,
+    ) -> list[list[float]]:
         """Embed a batch of texts into vectors."""
 
     @property
     @abstractmethod
     def model_name(self) -> str:
         """Return the model identifier."""
+
+    @property
+    @abstractmethod
+    def model_version(self) -> str | None:
+        """Return the pinned model version, if any."""
+
+    @property
+    @abstractmethod
+    def provider_name(self) -> str:
+        """Return the embedding provider name."""
 
     @property
     @abstractmethod
@@ -39,7 +72,11 @@ class SentenceTransformerEmbedder(Embedder):
         self.config = config
         self._model = SentenceTransformer(config.model)
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        progress_callback: Callable[[int, int], Any] | None = None,
+    ) -> list[list[float]]:
         """Encode texts into vectors."""
         # sentence-transformers is CPU-bound; run in default executor
         import asyncio
@@ -56,11 +93,21 @@ class SentenceTransformerEmbedder(Embedder):
             ),
         )
         result: list[list[float]] = embeddings.tolist()
+        if progress_callback is not None:
+            progress_callback(len(result), len(texts))
         return result
 
     @property
     def model_name(self) -> str:
         return self.config.model
+
+    @property
+    def model_version(self) -> str | None:
+        return self.config.model_version
+
+    @property
+    def provider_name(self) -> str:
+        return "sentence-transformers"
 
     @property
     def vector_size(self) -> int:
@@ -77,7 +124,11 @@ class OpenAIEmbedder(Embedder):
         self.model = config.model
         self._vector_size: int | None = None
 
-    async def embed(self, texts: list[str]) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        progress_callback: Callable[[int, int], Any] | None = None,
+    ) -> list[list[float]]:
         """Call OpenAI-compatible embedding endpoint."""
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -101,6 +152,8 @@ class OpenAIEmbedder(Embedder):
                 # Sort by index to preserve order
                 data.sort(key=lambda item: item["index"])
                 results.extend([item["embedding"] for item in data])
+                if progress_callback is not None:
+                    progress_callback(min(len(results), len(texts)), len(texts))
 
         if results and self._vector_size is None:
             self._vector_size = len(results[0])
@@ -110,6 +163,14 @@ class OpenAIEmbedder(Embedder):
     @property
     def model_name(self) -> str:
         return self.model
+
+    @property
+    def model_version(self) -> str | None:
+        return self.config.model_version
+
+    @property
+    def provider_name(self) -> str:
+        return "openai"
 
     @property
     def vector_size(self) -> int:
