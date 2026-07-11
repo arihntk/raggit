@@ -19,16 +19,9 @@ from raggit.api.models import (
     QueryRewriteMode,
     RAGConfig,
 )
-from raggit.core.audit import log_event
 from raggit.core.config import get_settings
 from raggit.core.logging import configure_logging, get_logger
 from raggit.db.session import AsyncSessionLocal
-from raggit.ingestion.indexer import Indexer
-from raggit.llm.augmenter import augment_and_answer
-from raggit.llm.factory import create_llm
-from raggit.retrieval.engine import RetrievalEngine
-from raggit.storage.base import FileAddedEvent, FileDeletedEvent, FileEvent, FileModifiedEvent
-from raggit.storage.factory import create_storage
 
 app = typer.Typer(
     name="raggit",
@@ -129,6 +122,10 @@ def ingest(
 
 
 async def _ingest(path: Path) -> None:
+    from raggit.core.audit import log_event
+    from raggit.ingestion.indexer import Indexer
+    from raggit.storage.factory import create_storage
+
     config = _get_config()
     configure_logging(config.log_level)
 
@@ -204,6 +201,11 @@ def watch(
 
 
 async def _watch(path: Path | None) -> None:
+    from raggit.core.audit import log_event
+    from raggit.ingestion.indexer import Indexer
+    from raggit.storage.base import FileAddedEvent, FileDeletedEvent, FileEvent, FileModifiedEvent
+    from raggit.storage.factory import create_storage
+
     config = _get_config()
     configure_logging(config.log_level)
 
@@ -329,6 +331,11 @@ async def _query(
     min_score: float | None = None,
     rewrite: QueryRewriteMode = QueryRewriteMode.NONE,
 ) -> None:
+    from raggit.core.audit import log_event
+    from raggit.llm.augmenter import augment_and_answer
+    from raggit.llm.factory import create_llm
+    from raggit.retrieval.engine import RetrievalEngine
+
     config = _get_config()
     configure_logging(config.log_level)
 
