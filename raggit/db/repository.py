@@ -131,10 +131,12 @@ class ChunkRepository:
         chunk_index: int,
         raw_content: str,
         cleaned_content: str,
-        token_count: int | None = None,
+        word_count: int | None = None,
         embedding_model: str | None = None,
         vector_id: UUID | None = None,
         parent_chunk_index: int | None = None,
+        prev_chunk_id: UUID | None = None,
+        next_chunk_id: UUID | None = None,
         section_title: str | None = None,
         page_number: int | None = None,
         start_offset: int | None = None,
@@ -147,10 +149,12 @@ class ChunkRepository:
             chunk_index=chunk_index,
             raw_content=raw_content,
             cleaned_content=cleaned_content,
-            token_count=token_count,
+            word_count=word_count,
             embedding_model=embedding_model,
             vector_id=str(vector_id) if vector_id else None,
             parent_chunk_index=parent_chunk_index,
+            prev_chunk_id=str(prev_chunk_id) if prev_chunk_id else None,
+            next_chunk_id=str(next_chunk_id) if next_chunk_id else None,
             section_title=section_title,
             page_number=page_number,
             start_offset=start_offset,
@@ -182,6 +186,39 @@ class ChunkRepository:
             select(ChunkModel).where(ChunkModel.id == str(chunk_id))
         )
         return result.scalar_one_or_none()
+
+    async def get_by_chunk_index(
+        self, document_id: UUID, chunk_index: int
+    ) -> ChunkModel | None:
+        """Get a chunk by its document and sequential index."""
+        result = await self.session.execute(
+            select(ChunkModel)
+            .where(
+                ChunkModel.document_id == str(document_id),
+                ChunkModel.chunk_index == chunk_index,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update_links(
+        self,
+        chunk_id: UUID,
+        *,
+        prev_chunk_id: UUID | None = None,
+        next_chunk_id: UUID | None = None,
+    ) -> None:
+        """Update sequential sibling links for a chunk."""
+        values: dict[str, Any] = {}
+        if prev_chunk_id is not None:
+            values["prev_chunk_id"] = str(prev_chunk_id)
+        if next_chunk_id is not None:
+            values["next_chunk_id"] = str(next_chunk_id)
+        if values:
+            await self.session.execute(
+                update(ChunkModel)
+                .where(ChunkModel.id == str(chunk_id))
+                .values(**values)
+            )
 
     async def get_siblings(
         self,

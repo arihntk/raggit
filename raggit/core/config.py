@@ -7,7 +7,15 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from raggit.api.models import EmbeddingConfig, LLMConfig, RAGConfig, SourceType, StorageConfig
+from raggit.api.models import (
+    ChunkingConfig,
+    EmbeddingConfig,
+    LLMConfig,
+    RAGConfig,
+    RetrievalConfig,
+    SourceType,
+    StorageConfig,
+)
 
 
 class Settings(BaseSettings):
@@ -32,14 +40,18 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # Chunking
-    chunk_size: int = 512
-    chunk_overlap: int = 128
+    chunk_size: int = 1024
+    chunk_overlap: int = 0
 
     # Retrieval
     min_top_k: int = 5
     max_top_k: int = 50
     top_k_ratio: float = 0.01
     rrf_k: int = 60
+    retrieval_traversal_enabled: bool = True
+    retrieval_traversal_max_steps: int = 10
+    retrieval_traversal_min_score: float = 0.01
+    retrieval_traversal_drop_ratio: float = 0.5
 
     # Embedding
     embedding_provider: str = "sentence-transformers"
@@ -80,10 +92,24 @@ class Settings(BaseSettings):
             log_level=self.log_level,
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
+            chunking=ChunkingConfig(
+                max_words_per_chunk=self.chunk_size,
+                chunk_overlap_words=self.chunk_overlap,
+            ),
             min_top_k=self.min_top_k,
             max_top_k=self.max_top_k,
             top_k_ratio=self.top_k_ratio,
             rrf_k=self.rrf_k,
+            retrieval=RetrievalConfig(
+                min_top_k=self.min_top_k,
+                max_top_k=self.max_top_k,
+                top_k_ratio=self.top_k_ratio,
+                rrf_k=self.rrf_k,
+                traversal_enabled=self.retrieval_traversal_enabled,
+                traversal_max_steps=self.retrieval_traversal_max_steps,
+                traversal_min_score=self.retrieval_traversal_min_score,
+                traversal_drop_ratio=self.retrieval_traversal_drop_ratio,
+            ),
             embedding=EmbeddingConfig(
                 provider=self.embedding_provider,
                 model=self.embedding_model,

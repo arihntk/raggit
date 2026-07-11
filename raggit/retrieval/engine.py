@@ -32,6 +32,16 @@ from raggit.retrieval.sanitizer import sanitize_query
 logger = get_logger("raggit.retrieval.engine")
 
 
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    """Compute cosine similarity between two vectors."""
+    dot = sum(x * y for x, y in zip(a, b, strict=True))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 def _clamp_top_k(total_chunks: int, min_k: int, max_k: int, ratio: float) -> int:
     """Compute dynamic top-k based on corpus size."""
     if total_chunks <= 0:
@@ -63,7 +73,7 @@ def _chunk_to_api(
         chunk_index=chunk_model.chunk_index,
         raw_content=chunk_model.raw_content,
         cleaned_content=content,
-        token_count=chunk_model.token_count,
+        word_count=chunk_model.word_count,
         embedding_model=chunk_model.embedding_model,
         vector_id=_as_uuid(chunk_model.vector_id) if chunk_model.vector_id else None,
         parent_chunk_index=chunk_model.parent_chunk_index,
@@ -220,9 +230,9 @@ class RetrievalEngine:
             return ranked
 
         embed_text = hyde_passage if hyde_passage else cleaned_query
+        query_vector = (await self.embedder.embed([embed_text]))[0]
 
         async def _semantic() -> list[tuple[UUID, UUID, float]]:
-            query_vector = (await self.embedder.embed([embed_text]))[0]
             return await self.vector_store.search(
                 query_vector, limit=candidate_limit, filters=filters
             )
@@ -332,6 +342,10 @@ class RetrievalEngine:
                 )
             )
 
+        # Expand hits by walking forward through next_chunk_id while relevance stays high.
+        if self.config and self.config.retrieval.traversal_enabled:
+            retrieved = await self._expand_by_traversal(retrieved, query_vector)
+
         retrieved = apply_score_threshold(retrieved, self.min_score, min_keep=0)
 
         refused = False
@@ -377,6 +391,119 @@ class RetrievalEngine:
             refusal_reason=refusal_reason,
             rewritten_queries=rewritten if rewritten != [cleaned_query] else [],
             total_chunks_considered=total_chunks,
+        )
+
+    async def _expand_by_traversal(
+        self,
+        hits: list[RetrievedChunk],
+        query_vector: list[float],
+    ) -> list[RetrievedChunk]:
+        """Walk forward from each hit while the next chunk stays relevant.
+
+        Consecutive chunks are merged into a single expanded hit so the LLM
+        receives contiguous context instead of many small fragments.
+        """
+        if not hits or not self.config:
+            return hits
+
+        cfg = self.config.retrieval
+        min_score = cfg.traversal_min_score
+        drop_ratio = cfg.traversal_drop_ratio
+        max_steps = cfg.traversal_max_steps
+
+        visited: set[UUID] = {_as_uuid(r.chunk.id) for r in hits}
+        expanded: list[RetrievedChunk] = []
+
+        for hit in hits:
+            chain = [hit]
+            current_chunk = hit.chunk
+            current_score = hit.score
+            steps = 0
+
+            while (
+                current_chunk.next_chunk_id is not None
+                and steps < max_steps
+                and _as_uuid(current_chunk.next_chunk_id) not in visited
+            ):
+                next_id = _as_uuid(current_chunk.next_chunk_id)
+                next_model = await self.chunk_repo.get_by_id(next_id)
+                if next_model is None:
+                    break
+
+                next_score = await self._score_chunk(next_model, query_vector)
+                if next_score is None:
+                    break
+
+                floor = max(min_score, current_score * (1 - drop_ratio))
+                if next_score < floor:
+                    break
+
+                # Reuse document metadata from the hit (sequential chunks share a document).
+                next_chunk = _chunk_to_api(
+                    next_model,
+                    source_uri=hit.chunk.source_uri,
+                    filename=hit.chunk.filename,
+                    tenant_id=hit.chunk.tenant_id,
+                    tags=hit.chunk.tags,
+                    harden=self._harden,
+                )
+                chain.append(
+                    RetrievedChunk(
+                        chunk=next_chunk,
+                        score=next_score,
+                        citation=_make_citation(next_chunk, next_score),
+                    )
+                )
+                visited.add(next_id)
+                current_chunk = next_chunk
+                current_score = next_score
+                steps += 1
+
+            if len(chain) > 1:
+                merged_chunk = self._merge_chain(chain)
+                merged_chunk = merged_chunk.model_copy(
+                    update={"next_chunk_id": current_chunk.next_chunk_id}
+                )
+                expanded.append(
+                    RetrievedChunk(
+                        chunk=merged_chunk,
+                        score=hit.score,
+                        rank_bm25=hit.rank_bm25,
+                        rank_semantic=hit.rank_semantic,
+                        rank_rerank=hit.rank_rerank,
+                        citation=_make_citation(merged_chunk, hit.score),
+                    )
+                )
+            else:
+                expanded.append(hit)
+
+        return expanded
+
+    async def _score_chunk(
+        self,
+        chunk_model: ChunkModel,
+        query_vector: list[float],
+    ) -> float | None:
+        """Score a chunk against the query using its stored Qdrant vector."""
+        if chunk_model.vector_id is None:
+            return None
+        vector = await self.vector_store.get_vector(_as_uuid(chunk_model.vector_id))
+        if vector is None:
+            return None
+        return _cosine_similarity(query_vector, vector)
+
+    def _merge_chain(self, chain: list[RetrievedChunk]) -> Chunk:
+        """Merge a chain of consecutive chunks into one expanded chunk."""
+        base = chain[0].chunk
+        last = chain[-1].chunk
+        merged_content = "\n\n".join(r.chunk.cleaned_content for r in chain)
+        total_words = sum(r.chunk.word_count or 0 for r in chain)
+        return base.model_copy(
+            update={
+                "cleaned_content": merged_content,
+                "end_offset": last.end_offset,
+                "word_count": total_words,
+            }
         )
 
     async def close(self) -> None:

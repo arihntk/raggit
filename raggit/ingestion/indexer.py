@@ -13,13 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from raggit.api.models import DocumentStatus, RAGConfig, SourceType
 from raggit.core.audit import log_event
 from raggit.core.logging import get_logger
+from raggit.db.models import ChunkModel
 from raggit.db.repository import (
     ChunkRepository,
     DocumentRepository,
     EmbeddingCollectionRepository,
 )
 from raggit.db.vector import VectorStore
-from raggit.ingestion.chunker import ChunkPiece, chunk_document, count_tokens
+from raggit.ingestion.chunker import ChunkPiece, chunk_document, count_words
 from raggit.ingestion.cleaner import clean_chunk
 from raggit.ingestion.embedder import collection_name_for_model, create_embedder
 from raggit.ingestion.injection import harden_against_injection
@@ -172,6 +173,7 @@ class Indexer:
             created_at_ts = datetime.now(UTC).timestamp()
             tags = list(doc.tags or [])
 
+            chunk_models: list[ChunkModel] = []
             for idx, ((piece, cleaned), vector) in enumerate(
                 zip(prepared, embeddings, strict=True)
             ):
@@ -180,7 +182,7 @@ class Indexer:
                     chunk_index=idx,
                     raw_content=piece.text,
                     cleaned_content=cleaned,
-                    token_count=piece.token_count or count_tokens(cleaned),
+                    word_count=piece.word_count or count_words(cleaned),
                     embedding_model=self.embedder.model_name,
                     parent_chunk_index=piece.parent_chunk_index,
                     section_title=piece.section_title,
@@ -189,6 +191,7 @@ class Indexer:
                     end_offset=piece.end_offset,
                     content_hash=piece.content_hash,
                 )
+                chunk_models.append(chunk_model)
 
                 await session.execute(
                     text(
@@ -211,6 +214,16 @@ class Indexer:
                     created_at_ts=created_at_ts,
                 )
                 chunk_model.vector_id = str(vector_id)
+
+            # Link chunks sequentially after all IDs are assigned.
+            for i, chunk_model in enumerate(chunk_models):
+                prev_id = UUID(str(chunk_models[i - 1].id)) if i > 0 else None
+                next_id = UUID(str(chunk_models[i + 1].id)) if i < len(chunk_models) - 1 else None
+                await chunk_repo.update_links(
+                    UUID(str(chunk_model.id)),
+                    prev_chunk_id=prev_id,
+                    next_chunk_id=next_id,
+                )
 
             await doc_repo.update_status(document_id, DocumentStatus.COMPLETED)
             logger.info(

@@ -215,6 +215,34 @@ class VectorStore:
             output.append((doc_id, chunk_id, point.score))
         return output
 
+    async def get_vector(self, vector_id: UUID) -> list[float] | None:
+        """Fetch a vector by its Qdrant point ID.
+
+        Returns None if the collection does not exist or the point is missing.
+        """
+        if not await self.client.collection_exists(self.collection):
+            return None
+        results = await self.client.retrieve(
+            collection_name=self.collection,
+            ids=[str(vector_id)],
+            with_vectors=True,
+        )
+        if not results:
+            return None
+        vector = results[0].vector
+        if isinstance(vector, dict):
+            # Named vectors are not used; this should not happen.
+            return None
+        if not vector:
+            return None
+        flat_vector: list[float] = []
+        for item in vector:
+            if isinstance(item, list):
+                # Batch-style nested vector; not expected for single-point retrieve.
+                return None
+            flat_vector.append(item)
+        return flat_vector
+
     async def close(self) -> None:
         """Close the Qdrant client."""
         await self.client.close()

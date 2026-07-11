@@ -68,7 +68,7 @@ class Chunk(BaseModel):
     chunk_index: int
     raw_content: str
     cleaned_content: str
-    token_count: int | None = None
+    word_count: int | None = None
     embedding_model: str | None = None
     vector_id: UUID | None = None
     # Hierarchical / location metadata
@@ -78,6 +78,9 @@ class Chunk(BaseModel):
     start_offset: int | None = None
     end_offset: int | None = None
     content_hash: str | None = None
+    # Sequential sibling links for relevance-chain retrieval
+    prev_chunk_id: UUID | None = None
+    next_chunk_id: UUID | None = None
     # Denormalized document fields for citations / filters
     source_uri: str | None = None
     filename: str | None = None
@@ -203,6 +206,11 @@ class RetrievalConfig(BaseModel):
     query_rewrite: QueryRewriteMode = QueryRewriteMode.NONE
     multi_query_count: int = 3
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
+    # Relevance-chain traversal: walk forward from a hit while relevance stays high.
+    traversal_enabled: bool = True
+    traversal_max_steps: int = 10
+    traversal_min_score: float = 0.01
+    traversal_drop_ratio: float = 0.5
 
 
 class SafetyConfig(BaseModel):
@@ -219,9 +227,8 @@ class SafetyConfig(BaseModel):
 class ChunkingConfig(BaseModel):
     """Chunking behaviour."""
 
-    chunk_size: int = 512  # tokens when token-based, else characters
-    chunk_overlap: int = 64
-    token_based: bool = True
+    max_words_per_chunk: int = 1024  # keep structural units intact up to this size
+    chunk_overlap_words: int = 0  # overlap for final word-window fallback
     dedup_enabled: bool = True
     dedup_similarity: float = 0.92
     format_aware: bool = True
@@ -235,9 +242,9 @@ class RAGConfig(BaseModel):
     qdrant_collection: str = "raggit_chunks"
     qdrant_api_key: str | None = None
     log_level: str = "INFO"
-    # Back-compat flat chunk fields (mirrored into chunking)
-    chunk_size: int = 512
-    chunk_overlap: int = 128
+    # Back-compat flat chunk fields (mirrored into chunking as words)
+    chunk_size: int = 1024
+    chunk_overlap: int = 0
     min_top_k: int = 5
     max_top_k: int = 50
     top_k_ratio: float = 0.01
