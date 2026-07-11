@@ -4,6 +4,8 @@
 
 raggit connects directly to local and remote object storage, automatically indexes documents, and answers questions using hybrid retrieval (BM25 + semantic) with reranking and LLM augmentation.
 
+**Full documentation:** https://raggit.pages.dev/
+
 ---
 
 ## Architecture

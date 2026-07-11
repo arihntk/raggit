@@ -149,6 +149,7 @@ cython_debug/
 # raggit specific
 # docs/ is intentionally gitignored as per project rules
 docs/
+documentation/
 
 # Local data volumes
 data/
