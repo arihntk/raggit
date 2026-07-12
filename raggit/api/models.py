@@ -257,3 +257,4 @@ class RAGConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     storage: StorageConfig | None = None
     default_tenant_id: str | None = None
+    default_tags: list[str] = Field(default_factory=list)

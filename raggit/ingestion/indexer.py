@@ -89,6 +89,7 @@ class Indexer:
             filename=file.relative_path,
             status=DocumentStatus.INDEXING,
             tenant_id=self.config.default_tenant_id,
+            tags=list(self.config.default_tags),
         )
         document_id = UUID(str(doc.id))
 
@@ -156,9 +157,7 @@ class Indexer:
                 if done == total or done % max(1, total // 10) == 0:
                     logger.info("Embedding progress", done=done, total=total, path=file.path)
 
-            embeddings = await self.embedder.embed(
-                cleaned_chunks, progress_callback=_progress
-            )
+            embeddings = await self.embedder.embed(cleaned_chunks, progress_callback=_progress)
             if len(embeddings) != len(prepared):
                 msg = (
                     f"Embedding count mismatch: got {len(embeddings)} vectors "

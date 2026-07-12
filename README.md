@@ -159,7 +159,17 @@ uv sync
 uv run alembic upgrade head
 ```
 
-### 5. Configure raggit
+### 5. Configure and bootstrap raggit
+
+`raggit setup` writes `~/.config/raggit/raggit.env` and, by default, bootstraps the system:
+
+- checks the PostgreSQL connection
+- runs Alembic migrations
+- checks the Qdrant connection
+- creates the Qdrant collection for the configured embedding model
+- creates the local document directory when using local storage
+
+Use `--skip-system-setup` to only write the env file, or individual `--skip-*` flags to skip specific bootstrap steps.
 
 #### Local storage (default)
 
@@ -193,8 +203,8 @@ uv run raggit setup \
   --storage-bucket my-bucket \
   --storage-prefix documents \
   --storage-region us-east-1 \
-  --aws-access-key-id $AWS_ACCESS_KEY_ID \
-  --aws-secret-access-key $AWS_SECRET_ACCESS_KEY \
+  --storage-aws-access-key-id $AWS_ACCESS_KEY_ID \
+  --storage-aws-secret-access-key $AWS_SECRET_ACCESS_KEY \
   --llm-provider openai \
   --llm-model gpt-4o-mini \
   --llm-api-key $OPENAI_API_KEY
@@ -218,7 +228,7 @@ uv run raggit setup \
   --storage-uri gs://my-bucket/documents \
   --storage-bucket my-bucket \
   --storage-prefix documents \
-  --gcs-service-account-path /path/to/service-account.json \
+  --storage-gcs-service-account-path /path/to/service-account.json \
   --llm-provider openai \
   --llm-model gpt-4o-mini \
   --llm-api-key $OPENAI_API_KEY
@@ -242,7 +252,7 @@ uv run raggit setup \
   --storage-uri azure://my-container/documents \
   --storage-container my-container \
   --storage-prefix documents \
-  --azure-connection-string $AZURE_STORAGE_CONNECTION_STRING \
+  --storage-azure-connection-string $AZURE_STORAGE_CONNECTION_STRING \
   --llm-provider openai \
   --llm-model gpt-4o-mini \
   --llm-api-key $OPENAI_API_KEY
@@ -288,13 +298,19 @@ uv run raggit watch ./data/documents
 
 | Command | Description |
 |---|---|
-| `raggit setup` | Interactive configuration (local, S3, GCS, Azure) |
-| `raggit ingest <path>` | One-time ingestion with a progress bar (path is optional for cloud storage) |
-| `raggit watch <path>` | Continuously watch and index with live event indicators |
+| `raggit setup` | Configure raggit and bootstrap the system for first-time use |
+| `raggit ingest [path]` | One-time ingestion with a progress bar (path is optional for cloud storage) |
+| `raggit watch [path]` | Continuously watch and index with live event indicators |
 | `raggit query "<question>"` | Ask a question; shows status spinners, chunk table, answer panel, and citation tree |
 | `raggit status` | Show indexed document status and active embedding collections |
 
-Query supports `--top-k`, `--source-prefix`, `--filename-prefix`, `--tenant`, `--tag`, `--min-score`, and `--rewrite`.
+`setup` exposes every configuration parameter as a CLI option with sensible defaults. See `raggit setup --help` for the full list.
+
+`ingest` supports `--chunk-size`, `--chunk-overlap`, `--preserve-sections/--split-sections`, `--embedding-provider`, `--embedding-model`, `--log-level`, `--tenant`, and `--tag`.
+
+`watch` supports `--poll-interval`, `--log-level`, `--tenant`, and `--tag`.
+
+`query` supports `--top-k`, `--min-top-k`, `--max-top-k`, `--top-k-ratio`, `--rrf-k`, `--source-prefix`, `--filename-prefix`, `--tenant`, `--tag`, `--document-id`, `--created-after`, `--created-before`, `--min-score`, `--rewrite`, `--multi-query-count`, `--parent-window`, `--reranker/--no-reranker`, `--reranker-model`, `--reranker-top-n`, `--refuse-on-empty/--no-refuse-on-empty`, `--refuse-on-low-score/--no-refuse-on-low-score`, `--min-answer-score`, `--groundedness-check/--no-groundedness-check`, `--pii-redaction/--no-pii-redaction`, `--prompt-injection-hardening/--no-prompt-injection-hardening`, and `--no-llm`.
 
 ---
 
@@ -339,9 +355,43 @@ Key variables:
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://raggit:raggit@localhost:5433/raggit` | PostgreSQL connection |
+| `DATABASE_URL` | `postgresql+asyncpg://raggit:raggit@localhost:5432/raggit` | PostgreSQL connection |
 | `QDRANT_URL` | `http://localhost:6333` | Qdrant URL |
 | `QDRANT_COLLECTION` | `raggit_chunks` | Qdrant collection name |
+| `QDRANT_API_KEY` | `None` | Qdrant API key |
+| `LOG_LEVEL` | `INFO` | Log level |
+| `CHUNK_SIZE` | `1024` | Target chunk size |
+| `CHUNK_OVERLAP` | `0` | Overlap between chunks |
+| `CHUNKING_DEDUP_ENABLED` | `true` | Remove near-duplicate chunks |
+| `CHUNKING_DEDUP_SIMILARITY` | `0.92` | Jaccard similarity threshold for dedup |
+| `CHUNKING_FORMAT_AWARE` | `true` | Use format-aware chunk boundaries |
+| `CHUNKING_PRESERVE_SECTIONS` | `true` | Keep detected sections whole |
+| `MIN_TOP_K` | `5` | Minimum retrieved chunks |
+| `MAX_TOP_K` | `50` | Maximum retrieved chunks |
+| `TOP_K_RATIO` | `0.01` | Fraction of total chunks for top-k scaling |
+| `RRF_K` | `60` | Reciprocal rank fusion constant |
+| `RETRIEVAL_PARENT_WINDOW` | `0` | Expand hits by +/- N siblings |
+| `RETRIEVAL_MIN_SCORE` | `None` | Drop chunks below this score |
+| `RETRIEVAL_QUERY_REWRITE` | `none` | Query rewrite: `none`, `multi_query`, `hyde` |
+| `RETRIEVAL_MULTI_QUERY_COUNT` | `3` | Variants for `multi_query` |
+| `RETRIEVAL_TRAVERSAL_ENABLED` | `true` | Relevance-chain traversal |
+| `RETRIEVAL_TRAVERSAL_MAX_STEPS` | `10` | Max traversal steps |
+| `RETRIEVAL_TRAVERSAL_MIN_SCORE` | `0.01` | Min score to continue traversal |
+| `RETRIEVAL_TRAVERSAL_DROP_RATIO` | `0.5` | Score ratio that stops traversal |
+| `RERANKER_ENABLED` | `false` | Cross-encoder reranking |
+| `RERANKER_MODEL` | `BAAI/bge-reranker-base` | Reranker model |
+| `RERANKER_TOP_N` | `20` | Candidates to rerank |
+| `EMBEDDING_PROVIDER` | `sentence-transformers` | Embedding provider |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model |
+| `EMBEDDING_API_KEY` | `None` | Embedding API key |
+| `EMBEDDING_BASE_URL` | `None` | OpenAI-compatible embedding base URL |
+| `EMBEDDING_BATCH_SIZE` | `32` | Texts per embedding batch |
+| `LLM_PROVIDER` | `openai` | LLM provider |
+| `LLM_MODEL` | `gpt-4o-mini` | Model name |
+| `LLM_BASE_URL` | `None` | OpenAI-compatible LLM base URL |
+| `LLM_API_KEY` | `None` | API key |
+| `LLM_TEMPERATURE` | `0.1` | Sampling temperature |
+| `LLM_MAX_TOKENS` | `2048` | Max response tokens |
 | `STORAGE_SOURCE_TYPE` | `local` | Storage backend: `local`, `s3`, `gcs`, `azure_blob` |
 | `STORAGE_URI` | `./data/documents` | Storage URI or local path |
 | `STORAGE_BUCKET` | `None` | S3/GCS bucket name |
@@ -352,11 +402,14 @@ Key variables:
 | `STORAGE_AWS_SECRET_ACCESS_KEY` | `None` | AWS secret access key |
 | `STORAGE_GCS_SERVICE_ACCOUNT_PATH` | `None` | GCS service account JSON path |
 | `STORAGE_AZURE_CONNECTION_STRING` | `None` | Azure Blob connection string |
-| `LLM_PROVIDER` | `openai` | LLM provider |
-| `LLM_MODEL` | `gpt-4o-mini` | Model name |
-| `LLM_API_KEY` | `None` | API key |
-| `EMBEDDING_PROVIDER` | `sentence-transformers` | Embedding provider |
-| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Embedding model |
+| `STORAGE_POLL_INTERVAL_SECONDS` | `30` | Watcher poll interval |
+| `SAFETY_REFUSE_ON_EMPTY` | `true` | Refuse when no chunks retrieved |
+| `SAFETY_REFUSE_ON_LOW_SCORE` | `true` | Refuse when scores are low |
+| `SAFETY_MIN_ANSWER_SCORE` | `0.01` | Minimum answer score |
+| `SAFETY_GROUNDEDNESS_CHECK` | `true` | Groundedness check |
+| `SAFETY_PII_REDACTION` | `false` | Redact PII before embedding |
+| `SAFETY_PROMPT_INJECTION_HARDENING` | `true` | Harden chunks against prompt injection |
+| `DEFAULT_TENANT_ID` | `None` | Default tenant id |
 
 ---
 

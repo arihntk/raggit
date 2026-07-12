@@ -11,8 +11,11 @@ from raggit.api.models import (
     ChunkingConfig,
     EmbeddingConfig,
     LLMConfig,
+    QueryRewriteMode,
     RAGConfig,
+    RerankerConfig,
     RetrievalConfig,
+    SafetyConfig,
     SourceType,
     StorageConfig,
 )
@@ -52,10 +55,19 @@ class Settings(BaseSettings):
     max_top_k: int = 50
     top_k_ratio: float = 0.01
     rrf_k: int = 60
+    retrieval_parent_window: int = 0
+    retrieval_min_score: float | None = None
+    retrieval_query_rewrite: str = "none"
+    retrieval_multi_query_count: int = 3
     retrieval_traversal_enabled: bool = True
     retrieval_traversal_max_steps: int = 10
     retrieval_traversal_min_score: float = 0.01
     retrieval_traversal_drop_ratio: float = 0.5
+
+    # Reranker
+    reranker_enabled: bool = False
+    reranker_model: str = "BAAI/bge-reranker-base"
+    reranker_top_n: int = 20
 
     # Embedding
     embedding_provider: str = "sentence-transformers"
@@ -85,6 +97,17 @@ class Settings(BaseSettings):
     storage_azure_connection_string: str | None = None
     storage_poll_interval_seconds: int = 30
 
+    # Safety / answer quality
+    safety_refuse_on_empty: bool = True
+    safety_refuse_on_low_score: bool = True
+    safety_min_answer_score: float | None = 0.01
+    safety_groundedness_check: bool = True
+    safety_pii_redaction: bool = False
+    safety_prompt_injection_hardening: bool = True
+
+    # Multi-tenancy
+    default_tenant_id: str | None = None
+
     @property
     def rag_config(self) -> RAGConfig:
         """Build the public RAGConfig from settings."""
@@ -113,11 +136,29 @@ class Settings(BaseSettings):
                 max_top_k=self.max_top_k,
                 top_k_ratio=self.top_k_ratio,
                 rrf_k=self.rrf_k,
+                parent_window=self.retrieval_parent_window,
+                min_score=self.retrieval_min_score,
+                query_rewrite=QueryRewriteMode(self.retrieval_query_rewrite),
+                multi_query_count=self.retrieval_multi_query_count,
                 traversal_enabled=self.retrieval_traversal_enabled,
                 traversal_max_steps=self.retrieval_traversal_max_steps,
                 traversal_min_score=self.retrieval_traversal_min_score,
                 traversal_drop_ratio=self.retrieval_traversal_drop_ratio,
+                reranker=RerankerConfig(
+                    enabled=self.reranker_enabled,
+                    model=self.reranker_model,
+                    top_n=self.reranker_top_n,
+                ),
             ),
+            safety=SafetyConfig(
+                refuse_on_empty=self.safety_refuse_on_empty,
+                refuse_on_low_score=self.safety_refuse_on_low_score,
+                min_answer_score=self.safety_min_answer_score,
+                groundedness_check=self.safety_groundedness_check,
+                pii_redaction=self.safety_pii_redaction,
+                prompt_injection_hardening=self.safety_prompt_injection_hardening,
+            ),
+            default_tenant_id=self.default_tenant_id,
             embedding=EmbeddingConfig(
                 provider=self.embedding_provider,
                 model=self.embedding_model,

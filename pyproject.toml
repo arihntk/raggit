@@ -92,6 +92,9 @@ select = [
     "SIM",# flake8-simplify
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"raggit/cli/**/*.py" = ["B008"]  # typer uses callables as argument defaults
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
