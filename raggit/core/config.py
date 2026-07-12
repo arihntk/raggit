@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # Chunking
     chunk_size: int = 1024
     chunk_overlap: int = 0
+    chunking_dedup_enabled: bool = True
+    chunking_dedup_similarity: float = 0.92
+    chunking_format_aware: bool = True
+    chunking_preserve_sections: bool = True
 
     # Retrieval
     min_top_k: int = 5
@@ -95,6 +99,10 @@ class Settings(BaseSettings):
             chunking=ChunkingConfig(
                 max_words_per_chunk=self.chunk_size,
                 chunk_overlap_words=self.chunk_overlap,
+                dedup_enabled=self.chunking_dedup_enabled,
+                dedup_similarity=self.chunking_dedup_similarity,
+                format_aware=self.chunking_format_aware,
+                preserve_sections=self.chunking_preserve_sections,
             ),
             min_top_k=self.min_top_k,
             max_top_k=self.max_top_k,

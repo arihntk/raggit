@@ -62,7 +62,7 @@ def test_chunk_code_preserves_function_names() -> None:
 
 def test_word_based_chunking_limits_words() -> None:
     text = "word " * 1000
-    config = _config(max_words_per_chunk=20, chunk_overlap_words=0)
+    config = _config(max_words_per_chunk=20, chunk_overlap_words=0, preserve_sections=False)
     pieces = chunk_document(text, config)
     for piece in pieces:
         assert count_words(piece.text) <= 20
@@ -76,10 +76,21 @@ def test_structural_unit_kept_when_under_limit() -> None:
     assert pieces[0].section_title == "Section"
 
 
+def test_preserve_sections_keeps_whole_section_over_chunk_limit() -> None:
+    text = "# Section\n" + "word " * 500
+    # With preserve_sections=True (default) the section is kept whole
+    # even though it far exceeds max_words_per_chunk.
+    config = _config(max_words_per_chunk=20, chunk_overlap_words=0, format_aware=True)
+    pieces = chunk_document(text, config, path="doc.md")
+    assert len(pieces) == 1
+    assert pieces[0].section_title == "Section"
+    assert count_words(pieces[0].text) == 500
+
+
 def test_recursive_split_respects_max_words() -> None:
     # A paragraph with 200 words, max 50 -> should split recursively.
     text = "Paragraph start. " + "word " * 200
-    config = _config(max_words_per_chunk=50, chunk_overlap_words=0)
+    config = _config(max_words_per_chunk=50, chunk_overlap_words=0, preserve_sections=False)
     pieces = chunk_document(text, config)
     assert len(pieces) > 1
     for piece in pieces:
@@ -88,7 +99,7 @@ def test_recursive_split_respects_max_words() -> None:
 
 def test_chunks_linked_sequentially() -> None:
     text = "one two three. four five six. seven eight nine. ten eleven twelve."
-    config = _config(max_words_per_chunk=3, chunk_overlap_words=0)
+    config = _config(max_words_per_chunk=3, chunk_overlap_words=0, preserve_sections=False)
     pieces = chunk_document(text, config)
     assert len(pieces) >= 2
     for i, piece in enumerate(pieces):

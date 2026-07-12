@@ -3,9 +3,10 @@
 Chunking strategy:
 
 1. Split the document into structural units (sections / pages / functions).
-2. Keep a unit intact if it is <= max_words_per_chunk words.
-3. If a unit is too large, recursively split it:
-   section -> paragraphs -> sentences -> word windows.
+2. By default keep each unit intact (preserve_sections=True). This avoids
+   cutting a section in the middle and gives the retriever full context.
+3. If preserve_sections is False and a unit exceeds max_words_per_chunk,
+   recursively split it: section -> paragraphs -> sentences -> word windows.
 4. Each produced piece knows its previous and next sibling index so retrieval
    can walk forward/backward through the document until relevance drops.
 """
@@ -350,18 +351,24 @@ def _pieces_from_segments(
     config: ChunkingConfig,
     page_number: int | None = None,
 ) -> list[ChunkPiece]:
-    """Convert structural segments into ChunkPieces with recursive splitting."""
+    """Convert structural segments into ChunkPieces.
+
+    When config.preserve_sections is True, each detected structural unit
+    (section / page / function) is kept as a single chunk regardless of
+    max_words_per_chunk. Otherwise the unit is recursively split so no
+    piece exceeds max_words.
+    """
     max_words = config.max_words_per_chunk
     overlap_words = config.chunk_overlap_words
+    preserve = config.preserve_sections
     pieces: list[ChunkPiece] = []
 
     for section_title, body, base_offset in segments:
         if not body.strip():
             continue
 
-        # Try to keep the whole section if it fits.
         parts: list[tuple[str, int]]
-        if count_words(body) <= max_words:
+        if preserve or count_words(body) <= max_words:
             parts = [(body, base_offset)]
         else:
             parts = _recursive_split_unit(

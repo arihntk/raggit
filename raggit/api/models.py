@@ -227,11 +227,12 @@ class SafetyConfig(BaseModel):
 class ChunkingConfig(BaseModel):
     """Chunking behaviour."""
 
-    max_words_per_chunk: int = 1024  # keep structural units intact up to this size
+    max_words_per_chunk: int = 1024  # soft upper bound; ignored when preserve_sections is True
     chunk_overlap_words: int = 0  # overlap for final word-window fallback
     dedup_enabled: bool = True
     dedup_similarity: float = 0.92
     format_aware: bool = True
+    preserve_sections: bool = True  # keep detected sections whole instead of splitting at max_words
 
 
 class RAGConfig(BaseModel):
