@@ -4,9 +4,18 @@
 
 raggit connects directly to local and remote object storage, automatically indexes documents, and answers questions using hybrid retrieval (BM25 + semantic) with reranking and LLM augmentation.
 
-[Documentation](https://raggit.pages.dev/)
+[Full documentation](https://raggit.pages.dev/)
 
 ---
+
+## Features
+
+- **Automatic continuous indexing** via `raggit serve`. Local filesystem changes are detected instantly through OS-native events.
+- **Hybrid retrieval** combines BM25 keyword search with dense semantic search, fused with weighted Reciprocal Rank Fusion.
+- **Format-aware chunking** preserves structure for Markdown, code, PDFs, and plain text.
+- **Multi-tenant filtering** by source URI, filename, tenant, tags, document IDs, and date range.
+- **Safety and observability** with optional PII redaction, prompt-injection hardening, and structured audit logs.
+- **Multiple storage backends**: local filesystem, S3, Google Cloud Storage, and Azure Blob Storage.
 
 ## Architecture
 
