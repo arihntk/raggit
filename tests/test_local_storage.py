@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from raggit.storage.base import FileAddedEvent
 from raggit.storage.local import LocalStorage, _to_deleted_storage_file
 
 
@@ -45,3 +48,35 @@ async def test_compute_hash(tmp_path: Path) -> None:
     storage = LocalStorage(str(root))
     digest = await storage.compute_hash(str(path.resolve()))
     assert len(digest) == 64
+
+
+async def test_local_watch_emits_events_without_polling(tmp_path: Path) -> None:
+    """Local storage uses OS-native events and does not rely on a poll loop."""
+    root = tmp_path / "watch"
+    root.mkdir()
+    storage = LocalStorage(str(root))
+
+    received: list[Any] = []
+
+    async def on_event(event: Any) -> None:
+        received.append(event)
+
+    watch_task = asyncio.create_task(
+        storage.watch(on_event, poll_interval_seconds=3600.0)
+    )
+    # Give watchdog a moment to start observing.
+    await asyncio.sleep(0.2)
+
+    (root / "new.md").write_text("hello", encoding="utf-8")
+    # Wait for the OS to deliver the event; should be well under the poll interval.
+    for _ in range(50):
+        if received:
+            break
+        await asyncio.sleep(0.05)
+
+    await storage.close()
+    await asyncio.wait_for(watch_task, timeout=2.0)
+
+    assert len(received) >= 1
+    assert isinstance(received[0], FileAddedEvent)
+    assert received[0].file.relative_path == "new.md"
