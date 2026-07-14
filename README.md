@@ -280,17 +280,19 @@ uv run raggit ingest
 uv run raggit query "What is raggit?"
 ```
 
-### 8. Run the watcher (continuous indexing)
+### 8. Run the service (continuous indexing)
 
 ```bash
-uv run raggit watch
+uv run raggit serve
 ```
 
 For local storage you can override the path:
 
 ```bash
-uv run raggit watch ./data/documents
+uv run raggit serve ./data/documents
 ```
+
+The legacy `raggit watch` command is still available and behaves the same way.
 
 ---
 
@@ -299,12 +301,15 @@ uv run raggit watch ./data/documents
 | Command | Description |
 |---|---|
 | `raggit setup` | Configure raggit and bootstrap the system for first-time use |
+| `raggit serve [path]` | Run the long-running service: watches storage and indexes changes automatically |
 | `raggit ingest [path]` | One-time ingestion with a progress bar (path is optional for cloud storage) |
-| `raggit watch [path]` | Continuously watch and index with live event indicators |
+| `raggit watch [path]` | Legacy continuous watcher; same behavior as `serve` but with live event indicators |
 | `raggit query "<question>"` | Ask a question; shows status spinners, chunk table, answer panel, and citation tree |
 | `raggit status` | Show indexed document status and active embedding collections |
 
 `setup` exposes every configuration parameter as a CLI option with sensible defaults. See `raggit setup --help` for the full list.
+
+`serve` supports `--log-level`, `--tenant`, and `--tag`. Local filesystem changes are detected instantly via OS-native events.
 
 `ingest` supports `--chunk-size`, `--chunk-overlap`, `--preserve-sections/--split-sections`, `--embedding-provider`, `--embedding-model`, `--log-level`, `--tenant`, and `--tag`.
 
@@ -326,7 +331,7 @@ This starts:
 
 - `raggit-postgres` on port `5433`
 - `raggit-qdrant` on ports `6333`/`6334`
-- `raggit-app` running the watcher
+- `raggit-app` running the service (watcher enabled by default)
 
 Mount your documents into `./data/documents`.
 
