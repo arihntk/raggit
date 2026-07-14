@@ -91,6 +91,8 @@ class Indexer:
             tenant_id=self.config.default_tenant_id,
             tags=list(self.config.default_tags),
         )
+        doc.file_size = file.size
+        doc.file_modified_at = file.modified_at
         document_id = UUID(str(doc.id))
 
         try:
@@ -301,6 +303,27 @@ class Indexer:
             },
         )
 
+    def _file_unchanged(self, file: StorageFile, existing: Any) -> bool:
+        """Return True when cheap metadata suggests the file has not changed.
+
+        Uses the DB snapshot of size and mtime like Git's index, avoiding
+        expensive hash reads for unchanged files.
+        """
+        if existing.status != DocumentStatus.COMPLETED:
+            return False
+        if existing.file_size is None or existing.file_modified_at is None:
+            return False
+        if existing.file_size != file.size:
+            return False
+        # Allow a small tolerance for timestamp precision differences.
+        existing_mtime: datetime = existing.file_modified_at
+        file_mtime: datetime = file.modified_at
+        if existing_mtime.tzinfo is None and file_mtime.tzinfo is not None:
+            existing_mtime = existing_mtime.replace(tzinfo=file_mtime.tzinfo)
+        elif existing_mtime.tzinfo is not None and file_mtime.tzinfo is None:
+            existing_mtime = existing_mtime.replace(tzinfo=None)
+        return bool(existing_mtime == file_mtime)
+
     async def sync_all(
         self,
         session: AsyncSession,
@@ -313,7 +336,10 @@ class Indexer:
 
         doc_repo = DocumentRepository(session)
         docs = await doc_repo.list_all()
-        existing_uris = {d.source_uri for d in docs if d.status != DocumentStatus.DELETED}
+        existing_by_uri: dict[str, Any] = {
+            d.source_uri: d for d in docs if d.status != DocumentStatus.DELETED
+        }
+        existing_uris = set(existing_by_uri.keys())
 
         for uri in existing_uris - current_uris:
             file = StorageFile(
@@ -326,6 +352,12 @@ class Indexer:
 
         total = len(files)
         for i, file in enumerate(files, start=1):
+            existing = existing_by_uri.get(file.path)
+            if existing is not None and self._file_unchanged(file, existing):
+                logger.info("Skipping unchanged file", path=file.path)
+                if progress_callback is not None:
+                    progress_callback(file, i, total)
+                continue
             await self.index_file(session, file)
             if progress_callback is not None:
                 progress_callback(file, i, total)

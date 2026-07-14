@@ -38,6 +38,8 @@ class DocumentModel(Base):
     source_uri: Mapped[str] = mapped_column(String(2048), nullable=False)
     filename: Mapped[str] = mapped_column(String(1024), nullable=False)
     content_hash: Mapped[str | None] = mapped_column(String(128))
+    file_size: Mapped[int | None] = mapped_column(Integer)
+    file_modified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus), default=DocumentStatus.PENDING, nullable=False
     )
