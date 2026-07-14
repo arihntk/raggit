@@ -153,6 +153,7 @@ class LocalStorage(Storage):
         self.root = Path(root_path).expanduser().resolve()
         self.root.mkdir(parents=True, exist_ok=True)
         self._observer: Any | None = None
+        self._stop_event: asyncio.Event | None = None
 
     def _resolve_safe(self, path: str) -> Path:
         """Resolve a path and ensure it stays within the storage root."""
@@ -192,24 +193,35 @@ class LocalStorage(Storage):
         on_event: FileEventCallback,
         poll_interval_seconds: float = 30.0,
     ) -> None:
-        """Watch the directory tree for changes using watchdog."""
+        """Watch the directory tree for changes using watchdog.
+
+        ``poll_interval_seconds`` is accepted for interface compatibility but is
+        ignored by the local backend: filesystem events are delivered instantly
+        by the OS via fsevents/inotify/kqueue.
+        """
         loop = asyncio.get_running_loop()
         handler = _LocalEventHandler(self.root, on_event, loop)
         self._observer = Observer()
         self._observer.schedule(handler, str(self.root), recursive=True)
         self._observer.start()
+        self._stop_event = asyncio.Event()
         logger.info("Started local storage watcher", root=str(self.root))
 
         try:
-            while True:
-                await asyncio.sleep(poll_interval_seconds)
+            await self._stop_event.wait()
         finally:
-            self._observer.stop()
-            self._observer.join()
+            observer = self._observer
+            if observer is not None:
+                observer.stop()
+                observer.join()
 
     async def close(self) -> None:
         """Stop the watcher if running."""
-        if self._observer:
-            self._observer.stop()
-            self._observer.join()
+        if self._stop_event is not None and not self._stop_event.is_set():
+            self._stop_event.set()
+        observer = self._observer
+        if observer is not None:
+            observer.stop()
+            observer.join()
             self._observer = None
+            self._stop_event = None

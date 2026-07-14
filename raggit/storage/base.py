@@ -70,7 +70,10 @@ class Storage(ABC):
     ) -> None:
         """Start watching for changes and call on_event for each change.
 
-        This method is expected to run indefinitely.
+        This method is expected to run indefinitely until :meth:`close` is
+        called. ``poll_interval_seconds`` is backend-specific: local watchers
+        use OS-native events and ignore it, while cloud watchers may use it as
+        the interval between bucket/container scans.
         """
 
     @abstractmethod

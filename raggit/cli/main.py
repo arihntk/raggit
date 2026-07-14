@@ -6,6 +6,7 @@ import typer
 
 from raggit.cli.ingest_cmd import register_ingest
 from raggit.cli.query_cmd import register_query
+from raggit.cli.serve_cmd import register_serve
 from raggit.cli.setup_cmd import register_setup
 from raggit.cli.status_cmd import register_status
 from raggit.cli.watch_cmd import register_watch
@@ -18,6 +19,7 @@ app = typer.Typer(
 
 register_setup(app)
 register_ingest(app)
+register_serve(app)
 register_watch(app)
 register_query(app)
 register_status(app)
