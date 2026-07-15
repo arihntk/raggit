@@ -1,6 +1,6 @@
 # raggit
 
-**Plug-and-play production-grade RAG system**
+**production grade advanced RAG system**
 
 raggit connects directly to local and remote object storage, automatically indexes documents, and answers questions using hybrid retrieval (BM25 + semantic) with reranking and LLM augmentation.
 
