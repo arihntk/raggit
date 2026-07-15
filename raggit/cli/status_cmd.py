@@ -41,6 +41,7 @@ async def _status(log_level: str | None) -> None:
         collections = await EmbeddingCollectionRepository(session).list_all()
 
     table = Table(title="Document Index Status")
+    table.add_column("ID")
     table.add_column("Filename")
     table.add_column("Status")
     table.add_column("Tenant")
@@ -48,6 +49,7 @@ async def _status(log_level: str | None) -> None:
     table.add_column("Updated")
     for doc in docs:
         table.add_row(
+            doc.id,
             doc.filename,
             doc.status.value,
             doc.tenant_id or "",
