@@ -8,6 +8,21 @@ raggit connects directly to local and remote object storage, automatically index
 
 ---
 
+## Core Features
+
+- **Automatic continuous indexing** — watch local filesystem or cloud storage and index new or changed documents automatically.
+- **Hybrid retrieval** — combine BM25 keyword search with dense semantic search, fused with weighted Reciprocal Rank Fusion.
+- **Format-aware chunking** — preserve structure for Markdown, code, PDFs, and plain text with configurable token-based sizing and overlap.
+- **Deduplication and cleaning** — remove near-duplicate chunks and normalize whitespace, unicode, and hyphenation.
+- **Multi-tenant filtering** — filter by source URI, filename, tenant, tags, document IDs, and date range.
+- **Safety and observability** — optional PII redaction, prompt-injection hardening, groundedness checks, and structured audit logging to PostgreSQL.
+- **Reranking and parent-window expansion** — cross-encoder reranking and context expansion around top hits.
+- **Query rewriting** — optional multi-query and HyDE expansion for better recall.
+- **Multiple storage backends** — local filesystem, S3, Google Cloud Storage, and Azure Blob Storage.
+- **OpenAI-compatible LLMs** — use OpenAI, Ollama, or any compatible provider for generation and embeddings.
+
+---
+
 ## Architecture
 
 ```mermaid
