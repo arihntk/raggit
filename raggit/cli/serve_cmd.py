@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import signal
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.panel import Panel
 
+from raggit.api.server import run_api_server
 from raggit.core.config import get_settings
 from raggit.core.logging import configure_logging, get_logger
 from raggit.core.watcher import WatcherService
@@ -52,18 +54,26 @@ def register_serve(app: typer.Typer) -> None:
             help="Directory to watch. Overrides configured storage URI for local storage.",
             exists=False,
         ),
+        host: str = typer.Option("0.0.0.0", "--host", help="API server host"),
+        port: int = typer.Option(8000, "--port", help="API server port"),
+        no_watcher: bool = typer.Option(
+            False, "--no-watcher", help="Do not start the storage watcher"
+        ),
         log_level: str | None = typer.Option(None, "--log-level", help="Override log level"),
         tenant: str | None = typer.Option(None, "--tenant", help="Default tenant id"),
         tag: list[str] = typer.Option(
             None, "--tag", help="Default tag for new documents (repeatable)"
         ),
     ) -> None:
-        """Run the long-running raggit service (watcher + future API)."""
-        asyncio.run(_serve(path, log_level, tenant, tag))
+        """Run the long-running raggit service (FastAPI API + optional watcher)."""
+        asyncio.run(_serve(path, host, port, no_watcher, log_level, tenant, tag))
 
 
 async def _serve(
     path: Path | None,
+    host: str,
+    port: int,
+    no_watcher: bool,
     log_level: str | None,
     tenant: str | None,
     tags: list[str] | None,
@@ -83,12 +93,15 @@ async def _serve(
         console.print("[red]No storage configured. Run `raggit setup` first.[/red]")
         raise typer.Exit(1)
 
-    watcher = WatcherService(config)
+    watcher: WatcherService | None = None
+    if not no_watcher:
+        watcher = WatcherService(config)
 
     console.print(
         Panel(
-            f"[bold]Serving[/bold] {config.storage.uri}\n"
-            f"Storage: {config.storage.source_type.value}",
+            f"[bold]API[/bold] http://{host}:{port}\n"
+            f"[bold]Storage[/bold] {config.storage.uri}\n"
+            f"[bold]Watcher[/bold] {'disabled' if no_watcher else 'enabled'}",
             title="raggit serve",
             border_style="blue",
         )
@@ -103,15 +116,37 @@ async def _serve(
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, _signal_handler)
 
+    api_task = asyncio.create_task(run_api_server(host=host, port=port))
+    watcher_task: asyncio.Task[None] | None = None
+
+    async def _start_watcher() -> None:
+        if watcher is None:
+            return
+        try:
+            await watcher.start()
+        except Exception:
+            logger.exception("Watcher service failed during startup")
+            stop_event.set()
+
+    if watcher is not None:
+        watcher_task = asyncio.create_task(_start_watcher())
+
     try:
-        await watcher.start()
         await stop_event.wait()
     except Exception as exc:
-        logger.exception("Watcher service failed", error=str(exc))
-        console.print(f"[red]Watcher service failed: {exc}[/red]")
+        logger.exception("Service failed", error=str(exc))
+        console.print(f"[red]Service failed: {exc}[/red]")
         raise typer.Exit(1) from exc
     finally:
-        console.print("\n[yellow]Stopping watcher service...[/yellow]")
-        await watcher.stop()
+        console.print("\n[yellow]Stopping raggit service...[/yellow]")
+        api_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await api_task
+        if watcher_task is not None:
+            watcher_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await watcher_task
+        if watcher is not None:
+            await watcher.stop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.remove_signal_handler(sig)

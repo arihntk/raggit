@@ -71,3 +71,9 @@ async def dispose_engine() -> None:
         await _engine.dispose()
         _engine = None
         _session_factory = None
+
+
+async def reset_engine() -> None:
+    """Dispose and recreate the engine when the database URL changes."""
+    await dispose_engine()
+    get_engine()

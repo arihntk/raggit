@@ -50,6 +50,8 @@ services:
       STORAGE_SOURCE_TYPE: local
       STORAGE_URI: /data/documents
       STORAGE_POLL_INTERVAL_SECONDS: "30"
+    ports:
+      - "8000:8000"
     volumes:
       - ./data/documents:/data/documents
     depends_on:
