@@ -11,6 +11,7 @@ from typing import Any
 from watchdog.events import (
     DirCreatedEvent,
     DirDeletedEvent,
+    DirModifiedEvent,
     FileSystemEvent,
     FileSystemEventHandler,
 )
@@ -111,7 +112,7 @@ class _LocalEventHandler(FileSystemEventHandler):
         )
 
     def on_modified(self, event: FileSystemEvent) -> None:
-        if isinstance(event, DirCreatedEvent):
+        if isinstance(event, DirModifiedEvent):
             return
         path = _event_path(event)
         if not _is_supported(path):

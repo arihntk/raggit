@@ -71,7 +71,14 @@ class WatcherService:
             )
             await self.indexer.sync_all(session)
 
-        self._watch_task = asyncio.create_task(self.storage.watch(self._on_event))
+        poll_interval = (
+            self.config.storage.poll_interval_seconds
+            if self.config.storage is not None
+            else 30.0
+        )
+        self._watch_task = asyncio.create_task(
+            self.storage.watch(self._on_event, poll_interval_seconds=poll_interval)
+        )
         logger.info("Watcher service is running")
 
     async def stop(self) -> None:

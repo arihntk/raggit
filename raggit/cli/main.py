@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from raggit.cli.chunks_cmd import register_chunks
 from raggit.cli.ingest_cmd import register_ingest
 from raggit.cli.query_cmd import register_query
 from raggit.cli.serve_cmd import register_serve
@@ -23,6 +24,7 @@ register_serve(app)
 register_watch(app)
 register_query(app)
 register_status(app)
+register_chunks(app)
 
 if __name__ == "__main__":
     app()
