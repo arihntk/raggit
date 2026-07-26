@@ -20,6 +20,7 @@ raggit connects directly to local and remote object storage, automatically index
 - **Query rewriting** — optional multi-query and HyDE expansion for better recall.
 - **Multiple storage backends** — local filesystem, S3, Google Cloud Storage, and Azure Blob Storage.
 - **OpenAI-compatible LLMs** — use OpenAI, Ollama, or any compatible provider for generation and embeddings.
+- **FastAPI HTTP API** — query, manage documents and chunks, inspect logs, update configuration, trigger ingestion, and control the watcher over HTTP.
 
 ---
 
@@ -127,16 +128,16 @@ flowchart TB
 Build and run the entire stack:
 
 ```bash
-docker compose up -d
-```
+   docker compose up -d
+   ```
 
-This starts:
+   This starts:
 
-- `raggit-postgres` on port `5433`
-- `raggit-qdrant` on ports `6333`/`6334`
-- `raggit-app` running the watcher/indexer service
+   - `raggit-postgres` on port `5433`
+   - `raggit-qdrant` on ports `6333`/`6334`
+   - `raggit-app` running the FastAPI server and watcher/indexer service on port `8000`
 
-If you rebuild the image after Dockerfile changes, recreate the app container:
+   If you rebuild the image after Dockerfile changes, recreate the app container:
 
 ```bash
 docker compose down raggit
@@ -197,4 +198,16 @@ uv run raggit query "What is raggit?"
 uv run raggit serve
 ```
 
-See the [full documentation](https://raggit.pages.dev/) for cloud storage options, configuration reference, and CLI details.
+   The `serve` command also starts the FastAPI HTTP server on port 8000. Visit `/docs` for interactive Swagger UI.
+
+8. **Use the HTTP API**:
+
+   ```bash
+   curl http://localhost:8000/health
+   curl http://localhost:8000/status
+   curl -X POST http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"query": "What is raggit?"}'
+   ```
+
+   See the [full documentation](https://raggit.pages.dev/) for cloud storage options, configuration reference, CLI details, and the complete API reference.
