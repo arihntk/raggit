@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>raggit · Documentation</title>
+  <meta name="description" content="Documentation for raggit, a plug-and-play production-grade RAG system.">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      var theme = localStorage.getItem('raggit-theme');
+      if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div class="page">
+    <header class="mobile-header">
+      <a href="#overview" class="site-title">raggit</a>
+      <div class="mobile-actions">
+        <a class="github-link" href="https://github.com/arihntk/raggit" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+        </a>
+        <button class="theme-toggle" aria-label="Toggle theme" id="theme-toggle-mobile">
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+        <button class="menu-button" aria-label="Toggle menu" id="menu-toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-brand">
+          <a href="#overview" class="site-title">raggit</a>
+          <div class="site-tagline">Production-grade RAG system</div>
+        </div>
+        <div class="header-actions">
+          <a class="github-link" href="https://github.com/arihntk/raggit" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub">
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none">
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+            </svg>
+          </a>
+          <button class="theme-toggle" aria-label="Toggle theme" id="theme-toggle">
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Guide</div>
+          <a href="#overview" class="nav-link active">Overview</a>
+          <a href="#features" class="nav-link">Features</a>
+          <a href="#quick-start" class="nav-link">Quick Start</a>
+          <a href="#architecture" class="nav-link">Architecture</a>
+          <a href="#data-model" class="nav-link">Data Model</a>
+          <a href="#ingestion" class="nav-link">Ingestion Pipeline</a>
+          <a href="#retrieval" class="nav-link">Retrieval Pipeline</a>
+          <a href="#watcher" class="nav-link">Watcher & Indexing</a>
+          <a href="#api" class="nav-link">HTTP API</a>
+          <a href="#cli" class="nav-link">CLI Reference</a>
+          <a href="#storage-backends" class="nav-link">Storage Backends</a>
+          <a href="#configuration" class="nav-link">Configuration</a>
+          <a href="#docker" class="nav-link">Docker Deployment</a>
+          <a href="#development" class="nav-link">Development</a>
+          <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Reference</div>
+          <a href="#environment-variables" class="nav-link">Environment Variables</a>
+          <a href="#license" class="nav-link">License</a>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        MIT License · raggit contributors
+      </div>
+    </aside>
+
+    <main class="main">
+      <article class="content">
+        <section id="overview">
+          <h1>raggit</h1>
+          <p class="lead">A plug-and-play production-grade RAG system that connects to local and remote object storage, automatically indexes documents, and answers questions using hybrid retrieval with reranking and LLM augmentation.</p>
+
+          <h2>What raggit does</h2>
+          <p>raggit is built for teams that need reliable retrieval-augmented generation without managing a patchwork of vector databases, parsers, and rerankers. It handles the full document lifecycle: watching storage, parsing common formats, chunking intelligently, embedding, searching, and generating cited answers.</p>
+
+          <p>Documents live in storage you already control. Point raggit at a local directory, S3 bucket, GCS bucket, or Azure container and it keeps an index in sync automatically. Query it through the CLI and receive an answer grounded in your documents, with citations.</p>
+
+          <div class="callout callout-note">
+            <div class="callout-title">Project status</div>
+            <p>raggit is in early development. The core ingestion, retrieval, CLI, and HTTP API flows are functional and tested. Analytics are on the roadmap.</p>
+          </div>
+        </section>
+
+        <section id="features">
+          <h2>Features</h2>
+
+          <h3>Ingestion</h3>
+          <ul>
+            <li><strong>Automatic watching</strong> via <code>raggit serve</code>. Local filesystem changes are detected instantly through OS-native events (fsevents/inotify). Cloud storage is polled and diffed.</li>
+            <li><strong>Format-aware parsing</strong> for PDF, DOCX, HTML, Markdown, and plain text. PDF page numbers are preserved through chunking.</li>
+            <li><strong>Smart chunking</strong> respects Markdown headers, code boundaries, and PDF pages, with recursive character splitting as a fallback.</li>
+            <li><strong>Deduplication</strong> removes exact and near-duplicate chunks using content hashes and Jaccard word-set similarity.</li>
+            <li><strong>Cleaning & normalization</strong> fixes Unicode, hyphenation, and whitespace before embedding.</li>
+            <li><strong>Optional safety steps</strong>: PII redaction and prompt-injection hardening.</li>
+            <li><strong>Model-scoped collections</strong> in Qdrant so changing embedding models never corrupts an existing index.</li>
+          </ul>
+
+          <h3>Retrieval</h3>
+          <ul>
+            <li><strong>Hybrid search</strong> combines BM25 keyword search with dense semantic search.</li>
+            <li><strong>Weighted Reciprocal Rank Fusion</strong> merges heterogeneous rank lists.</li>
+            <li><strong>Query rewriting</strong> with multi-query expansion and HyDE.</li>
+            <li><strong>Optional cross-encoder reranking</strong> for better top-N ordering.</li>
+            <li><strong>Dynamic top-k</strong> scales with corpus size while staying bounded.</li>
+            <li><strong>Parent-window expansion</strong> provides surrounding context for each hit.</li>
+            <li><strong>Structured citations</strong> include source URI, filename, page, section, offsets, score, and excerpt.</li>
+          </ul>
+
+          <h3>Operations</h3>
+          <ul>
+            <li><strong>Multi-tenancy & filtering</strong> by tenant, tags, source prefix, filename prefix, document IDs, and date range.</li>
+            <li><strong>Structured audit logs</strong> persisted to PostgreSQL for every ingestion, query, and answer.</li>
+            <li><strong>Document lifecycle status</strong> tracks pending, indexing, parsed, chunked, embedded, completed, failed, and deleted states.</li>
+            <li><strong>Async-first</strong> architecture using asyncpg, async Qdrant client, and async cloud SDKs.</li>
+            <li><strong>FastAPI HTTP API</strong> with interactive <code>/docs</code> Swagger UI for every operation: query, manage documents, inspect chunks and logs, update configuration, trigger ingestion, and control the watcher.</li>
+          </ul>
+        </section>
+
+        <section id="quick-start">
+          <h2>Quick Start</h2>
+          <p>You need <a href="https://www.docker.com/products/docker-desktop/">Docker Desktop</a> (or Docker Engine + Compose). For local development you also need <a href="https://docs.astral.sh/uv/getting-started/installation/">uv</a>.</p>
+
+          <h3>Option 1: Docker (recommended)</h3>
+          <p>Build and run the entire stack with one command:</p>
+          <pre><code>docker compose up -d</code></pre>
+
+          <p>This starts:</p>
+          <ul>
+            <li><code>raggit-postgres</code> on port <code>5433</code></li>
+            <li><code>raggit-qdrant</code> on ports <code>6333</code> and <code>6334</code></li>
+            <li><code>raggit-app</code> running <code>raggit serve</code> with the FastAPI server on port <code>8000</code> and the watcher enabled</li>
+          </ul>
+
+          <p>Place documents in <code>./data/documents</code> for local storage ingestion. The container entrypoint applies Alembic migrations before starting the service.</p>
+
+          <p>If you rebuild the image after <code>Dockerfile</code> changes, recreate the app container:</p>
+          <pre><code>docker compose down raggit
+docker compose build --no-cache raggit
+docker compose up -d raggit</code></pre>
+
+          <h4>Useful commands</h4>
+          <pre><code># View logs
+docker compose logs -f raggit
+
+# Run one-time ingestion inside the container
+docker compose exec raggit raggit ingest
+
+# Run a query
+docker compose exec raggit raggit query "What is raggit?"
+
+# Stop everything
+docker compose down</code></pre>
+
+          <h3>Option 2: Local development</h3>
+          <ol class="steps">
+            <li>
+              <h4>Start PostgreSQL and Qdrant</h4>
+              <pre><code>docker compose up -d postgres qdrant</code></pre>
+              <p>PostgreSQL is mapped to host port <code>5433</code> to avoid conflicts with a local postgres on <code>5432</code>.</p>
+            </li>
+            <li>
+              <h4>Install dependencies</h4>
+              <pre><code>uv sync</code></pre>
+            </li>
+            <li>
+              <h4>Run database migrations</h4>
+              <pre><code>uv run alembic upgrade head</code></pre>
+            </li>
+            <li>
+              <h4>Configure raggit</h4>
+              <pre><code>uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type local \
+  --storage-uri ./data/documents \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY</code></pre>
+              <p><code>raggit setup</code> writes <code>~/.config/raggit/raggit.env</code> with <code>0600</code> permissions and bootstraps the system by checking Postgres, running migrations, checking Qdrant, and creating the local document directory.</p>
+            </li>
+            <li>
+              <h4>Add documents</h4>
+              <pre><code>mkdir -p data/documents
+cp my-docs/*.pdf data/documents/</code></pre>
+            </li>
+            <li>
+              <h4>Run the service for continuous indexing</h4>
+              <pre><code>uv run raggit serve</code></pre>
+              <p>raggit will start the FastAPI server on <code>http://localhost:8000</code> and perform an initial sync, then watch for new, modified, and deleted files. Local changes are reflected almost instantly. Open <code>/docs</code> for interactive Swagger UI.</p>
+            </li>
+            <li>
+              <h4>Ask questions</h4>
+              <pre><code>uv run raggit query "What is raggit?"</code></pre>
+              <p>Or use the HTTP API:</p>
+              <pre><code>curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is raggit?"}'</code></pre>
+            </li>
+          </ol>
+
+          <p>See the <a href="#api">HTTP API</a> and <a href="#storage-backends">storage backends</a> sections for more. The legacy <code>raggit watch</code> command is still available if you prefer live event indicators in the terminal.</p>
+        </section>
+
+        <section id="architecture">
+          <h2>Architecture</h2>
+          <p>raggit is organized into clear layers: storage, ingestion, data, retrieval, LLM, audit, and interface. The HTTP API is built on FastAPI and exposes every major operation. All I/O is async, and every significant input and output is logged to PostgreSQL.</p>
+
+          <div class="diagram" id="architecture-diagram">
+            <pre class="mermaid-source">flowchart TB
+    subgraph Storage
+        LS[Local Filesystem]
+        RS[S3 / GCS / Azure Blob]
+    end
+
+    subgraph Ingestion
+        W[Watcher Service]
+        I[Indexing Service]
+        P[Parser Registry]
+        FA[Format-Aware Chunker]
+        DED[Dedup]
+        CL[Chunk Cleaner]
+        PI[PII Redaction]
+        IH[Injection Hardening]
+        E[Embedder]
+    end
+
+    subgraph PostgreSQL
+        D[documents]
+        CH[chunks]
+        EC[embedding_collections]
+        LG[logs]
+    end
+
+    VS[Qdrant Vector Store]
+
+    LS --> W
+    RS --> W
+    W --> I
+    I --> P
+    P --> FA
+    FA --> DED
+    DED --> CL
+    CL --> PI
+    PI --> IH
+    IH --> E
+    E --> VS
+    I --> D
+    IH --> CH
+    E --> CH
+    I --> EC
+    IH --> LG
+    E --> LG
+
+    subgraph Retrieval
+        Q[User Query]
+        QR[Query Rewriter]
+        MQ[Multi-Query]
+        HY[HyDE]
+        BM25[Postgres FTS / BM25]
+        SEM[Qdrant Semantic Search]
+        RRF[Weighted RRF]
+        RR[Cross-Encoder Reranker]
+        TH[Score Threshold]
+        PW[Parent-Window Expansion]
+        AUG[Augmenter]
+        LLM[LLM Provider]
+        GRD[Groundedness Check]
+        OUT[Answer + Citations]
+    end
+
+    Q --> QR
+    QR --> BM25
+    QR --> SEM
+    QR --> MQ
+    QR --> HY
+    BM25 --> RRF
+    SEM --> RRF
+    RRF --> RR
+    RR --> TH
+    TH --> PW
+    PW --> AUG
+    AUG --> LLM
+    LLM --> GRD
+    GRD --> OUT
+    RRF --> LG
+    AUG --> LG
+    LLM --> LG
+
+    subgraph Interface
+        CLI[Typer CLI]
+        API[FastAPI HTTP API]
+    end
+
+    API --> Q
+    CLI --> Q
+    API --> W
+    CLI --> W</pre>
+          </div>
+
+          <h3>Component responsibilities</h3>
+          <ul>
+            <li><strong>Storage layer</strong> abstracts local directories and cloud object stores behind a common interface. Local backends emit OS-native events; cloud backends poll and diff.</li>
+            <li><strong>WatcherService</strong> starts storage watching, runs an initial sync, and dispatches file events to the indexer with lightweight debouncing.</li>
+            <li><strong>Indexer</strong> orchestrates hash checks, parsing, chunking, cleaning, embedding, and persistence.</li>
+            <li><strong>Parser registry</strong> selects the right parser by file extension and extracts text plus structural hints like page numbers.</li>
+            <li><strong>Chunker</strong> produces format-aware pieces and links sequential siblings for relevance-chain retrieval.</li>
+            <li><strong>Embedder</strong> generates dense vectors using sentence-transformers or an OpenAI-compatible API.</li>
+            <li><strong>Vector store</strong> manages Qdrant collections scoped to the embedding model and version.</li>
+            <li><strong>Retrieval engine</strong> sanitizes queries, optionally rewrites them, runs BM25 and semantic search in parallel, fuses results, reranks, thresholds, and expands parent windows.</li>
+            <li><strong>LLM layer</strong> augments prompts with isolated untrusted context and generates cited answers.</li>
+            <li><strong>Audit logger</strong> persists structured events to PostgreSQL.</li>
+            <li><strong>HTTP API</strong> exposes every operation via FastAPI with interactive OpenAPI documentation at <code>/docs</code>.</li>
+          </ul>
+
+          <h3>Design goals</h3>
+          <ul>
+            <li><strong>Accuracy</strong> through hybrid retrieval, cross-encoder reranking, query rewriting, and parent-document expansion.</li>
+            <li><strong>Safety</strong> by isolating untrusted document text from system instructions and optionally redacting PII.</li>
+            <li><strong>Observability</strong> with lifecycle statuses, model-scoped collections, and structured audit logs.</li>
+            <li><strong>Multi-tenancy</strong> via <code>tenant_id</code> and tags applied consistently across BM25 and vector search.</li>
+            <li><strong>Evolvability</strong> via model-scoped Qdrant collections so changing embedding models does not corrupt existing indexes.</li>
+          </ul>
+        </section>
+
+        <section id="data-model">
+          <h2>Data Model</h2>
+          <p>PostgreSQL is the source of truth for metadata, chunks, audit logs, and collection tracking. Qdrant holds the dense vectors with filterable payloads.</p>
+
+          <h3><code>documents</code></h3>
+          <table>
+            <thead>
+              <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>UUID</td><td>Primary key.</td></tr>
+              <tr><td><code>source_type</code></td><td>enum</td><td><code>local</code>, <code>s3</code>, <code>gcs</code>, <code>azure_blob</code>.</td></tr>
+              <tr><td><code>source_uri</code></td><td>string</td><td>Stable URI such as a local path or <code>s3://bucket/key</code>.</td></tr>
+              <tr><td><code>filename</code></td><td>string</td><td>Relative filename.</td></tr>
+              <tr><td><code>content_hash</code></td><td>string</td><td>Hash of file contents used to skip unchanged files.</td></tr>
+              <tr><td><code>file_size</code></td><td>integer</td><td>Cached file size for fast sync decisions.</td></tr>
+              <tr><td><code>file_modified_at</code></td><td>timestamptz</td><td>Cached modification time for fast sync decisions.</td></tr>
+              <tr><td><code>status</code></td><td>enum</td><td><code>pending</code>, <code>indexing</code>, <code>parsed</code>, <code>chunked</code>, <code>embedded</code>, <code>completed</code>, <code>failed</code>, <code>deleted</code>.</td></tr>
+              <tr><td><code>error_message</code></td><td>text</td><td>Failure reason when status is <code>failed</code>.</td></tr>
+              <tr><td><code>tenant_id</code></td><td>string</td><td>Optional tenant identifier.</td></tr>
+              <tr><td><code>tags</code></td><td>array</td><td>Optional filter tags.</td></tr>
+              <tr><td><code>created_at</code></td><td>timestamptz</td><td>Row creation time.</td></tr>
+              <tr><td><code>updated_at</code></td><td>timestamptz</td><td>Row update time.</td></tr>
+              <tr><td><code>deleted_at</code></td><td>timestamptz</td><td>Soft-deletion timestamp.</td></tr>
+            </tbody>
+          </table>
+
+          <h3><code>chunks</code></h3>
+          <table>
+            <thead>
+              <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>UUID</td><td>Primary key.</td></tr>
+              <tr><td><code>document_id</code></td><td>UUID</td><td>Foreign key to <code>documents</code>.</td></tr>
+              <tr><td><code>chunk_index</code></td><td>integer</td><td>Sequential index within the document.</td></tr>
+              <tr><td><code>raw_content</code></td><td>text</td><td>Original chunk text.</td></tr>
+              <tr><td><code>cleaned_content</code></td><td>text</td><td>Normalized chunk text used for embedding and BM25.</td></tr>
+              <tr><td><code>word_count</code></td><td>integer</td><td>Word count for diagnostics.</td></tr>
+              <tr><td><code>embedding_model</code></td><td>string</td><td>Model that produced the embedding.</td></tr>
+              <tr><td><code>vector_id</code></td><td>UUID</td><td>Qdrant point ID.</td></tr>
+              <tr><td><code>fts_vector</code></td><td>tsvector</td><td>PostgreSQL full-text search vector.</td></tr>
+              <tr><td><code>parent_chunk_index</code></td><td>integer</td><td>Parent chunk for hierarchical chunking.</td></tr>
+              <tr><td><code>prev_chunk_id</code></td><td>UUID</td><td>Previous sibling chunk.</td></tr>
+              <tr><td><code>next_chunk_id</code></td><td>UUID</td><td>Next sibling chunk.</td></tr>
+              <tr><td><code>section_title</code></td><td>string</td><td>Section or heading, if detected.</td></tr>
+              <tr><td><code>page_number</code></td><td>integer</td><td>PDF page number, if detected.</td></tr>
+              <tr><td><code>start_offset</code></td><td>integer</td><td>Character offset in source text.</td></tr>
+              <tr><td><code>end_offset</code></td><td>integer</td><td>Character offset in source text.</td></tr>
+              <tr><td><code>content_hash</code></td><td>string</td><td>Hash of chunk content.</td></tr>
+            </tbody>
+          </table>
+
+          <h3><code>embedding_collections</code></h3>
+          <p>Tracks which Qdrant collection is active for the current embedding model. Changing models creates a new collection and activates it automatically.</p>
+
+          <h3><code>logs</code></h3>
+          <p>Structured audit log with level, component, message, and JSON <code>extra</code> field. Captures ingestion inputs/outputs, queries, retrieval results, and generated answers.</p>
+        </section>
+
+        <section id="ingestion">
+          <h2>Ingestion Pipeline</h2>
+          <p>When a file is added or changed, the watcher triggers the indexer, which runs the document through parsing, format-aware chunking, cleaning, optional safety steps, embedding, and persistence.</p>
+
+          <div class="pipeline">
+            <div class="pipeline-step">
+              <div class="pipeline-number">1</div>
+              <div class="pipeline-content"><strong>Watch</strong> local filesystem or remote object storage for add, modify, and delete events.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">2</div>
+              <div class="pipeline-content"><strong>Parse</strong> PDF, DOCX, HTML, Markdown, and plain text. PDF pages are marked explicitly so page numbers survive chunking.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">3</div>
+              <div class="pipeline-content"><strong>Chunk</strong> in a format-aware way: Markdown by headers, code by top-level definitions, PDF by page markers, and fallback recursive character splitting.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">4</div>
+              <div class="pipeline-content"><strong>Size</strong> chunks by tokens using <code>tiktoken</code> cl100k_base when available, with configurable overlap.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">5</div>
+              <div class="pipeline-content"><strong>Dedup</strong> near-identical chunks using content hash plus Jaccard word-set similarity.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">6</div>
+              <div class="pipeline-content"><strong>Clean</strong> chunks by normalizing Unicode, collapsing whitespace, and fixing hyphenation.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">7</div>
+              <div class="pipeline-content"><strong>Redact PII</strong> (optional) and <strong>harden</strong> against prompt-injection patterns before embedding.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">8</div>
+              <div class="pipeline-content"><strong>Embed</strong> chunks using local sentence-transformers or an OpenAI-compatible API.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">9</div>
+              <div class="pipeline-content"><strong>Store</strong> vectors in a model-scoped Qdrant collection and metadata/links in PostgreSQL.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">10</div>
+              <div class="pipeline-content"><strong>Audit</strong> every ingestion input and output to the PostgreSQL <code>logs</code> table.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="retrieval">
+          <h2>Retrieval Pipeline</h2>
+          <p>Queries are sanitized, optionally rewritten, run through BM25 and semantic search in parallel, fused, reranked, expanded, and then passed to the LLM with citations.</p>
+
+          <div class="pipeline">
+            <div class="pipeline-step">
+              <div class="pipeline-number">1</div>
+              <div class="pipeline-content"><strong>Sanitize</strong> the query to extract keywords.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">2</div>
+              <div class="pipeline-content"><strong>Rewrite</strong> the query when configured: <code>multi_query</code> generates alternative phrasings; <code>hyde</code> generates a hypothetical answer passage to embed.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">3</div>
+              <div class="pipeline-content"><strong>Filter</strong> BM25 and semantic searches by metadata: source URI prefix, filename prefix, tenant, tags, document IDs, date range.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">4</div>
+              <div class="pipeline-content"><strong>BM25</strong> keyword search via PostgreSQL full-text search with a <code>tsvector</code> GIN index.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">5</div>
+              <div class="pipeline-content"><strong>Semantic</strong> similarity search via Qdrant cosine distance.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">6</div>
+              <div class="pipeline-content"><strong>Fuse</strong> ranked lists with weighted Reciprocal Rank Fusion with tunable BM25/semantic weights.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">7</div>
+              <div class="pipeline-content"><strong>Rerank</strong> top-N candidates with an optional cross-encoder such as <code>BAAI/bge-reranker-base</code>.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">8</div>
+              <div class="pipeline-content"><strong>Threshold</strong> low-confidence chunks with <code>min_score</code> and refuse empty or low-score retrieval.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">9</div>
+              <div class="pipeline-content"><strong>Expand</strong> parent-document windows around each hit when <code>parent_window &gt; 0</code>.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">10</div>
+              <div class="pipeline-content"><strong>Cite</strong> every chunk with ID, source URI, filename, page, section, offsets, score, and excerpt.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">11</div>
+              <div class="pipeline-content"><strong>Augment</strong> the prompt with isolated untrusted-context wrappers and system instructions.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">12</div>
+              <div class="pipeline-content"><strong>Generate</strong> an answer via an OpenAI-compatible API or Ollama.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">13</div>
+              <div class="pipeline-content"><strong>Check</strong> groundedness and warn if the answer is not supported by retrieved context.</div>
+            </div>
+            <div class="pipeline-step">
+              <div class="pipeline-number">14</div>
+              <div class="pipeline-content"><strong>Audit</strong> the query, retrieval result, and final answer to the PostgreSQL <code>logs</code> table.</div>
+            </div>
+          </div>
+        </section>
+
+        <section id="watcher">
+          <h2>Watcher & Continuous Indexing</h2>
+          <p>raggit keeps your index in sync with storage automatically. The recommended way to run it is <code>raggit serve</code>, a lightweight long-running process that starts a <code>WatcherService</code>.</p>
+
+          <h3>raggit serve</h3>
+          <p><code>raggit serve</code> is the default long-running mode. It:</p>
+          <ul>
+            <li>Loads configuration from environment variables and <code>~/.config/raggit/raggit.env</code>.</li>
+            <li>Runs an initial full sync of all existing files.</li>
+            <li>Starts the storage-specific watcher.</li>
+            <li>Dispatches add/modify/delete events to the indexer with per-path debouncing.</li>
+            <li>Handles SIGINT and SIGTERM gracefully.</li>
+          </ul>
+
+          <pre><code>uv run raggit serve
+uv run raggit serve ./data/documents
+uv run raggit serve --log-level DEBUG --tenant acme --tag finance</code></pre>
+
+          <h3>Event-driven local watching</h3>
+          <p>For local directories, raggit uses <code>watchdog</code> to receive OS-native filesystem events (FSEvents on macOS, inotify on Linux). This means:</p>
+          <ul>
+            <li>New or modified files are detected almost instantly.</li>
+            <li>There is no periodic polling loop waking the CPU.</li>
+            <li>Idle resource usage is negligible.</li>
+          </ul>
+
+          <h3>Git-like stat snapshot</h3>
+          <p>On startup and during sync, raggit stores a cheap stat snapshot (<code>file_size</code> and <code>file_modified_at</code>) for each document. When a file is seen again, the indexer first compares this metadata. Only when size or modification time differs does it read the file and compute a content hash. This makes initial sync fast when most files have not changed.</p>
+
+          <h3>Cloud storage watching</h3>
+          <p>S3, GCS, and Azure backends do not have a universal push-notification mechanism, so they use lightweight polling and snapshot diffing. The interval is configurable with <code>STORAGE_POLL_INTERVAL_SECONDS</code> (default 30 seconds). You can make cloud watching near-instant by routing provider events (S3 Event Notifications, GCS Pub/Sub, Azure Event Grid) into a queue that a future extension can consume.</p>
+
+          <h3>raggit watch (legacy mode)</h3>
+          <p><code>raggit watch</code> is preserved for users who want an explicit command with live <code>+</code>/<code>-</code> event indicators in the terminal. It uses the same <code>WatcherService</code> internally.</p>
+
+          <div class="callout callout-tip">
+            <div class="callout-title">Deployment tip</div>
+            <p>The included <code>docker-compose.yml</code> runs <code>raggit serve</code> by default, so the container starts the FastAPI server and watcher as soon as it comes up.</p>
+          </div>
+        </section>
+
+        <section id="api">
+          <h2>HTTP API</h2>
+          <p>raggit exposes a FastAPI HTTP server on port <code>8000</code> (configurable via <code>--port</code>). Every major operation is available over HTTP, and interactive documentation is served at <code>/docs</code> (Swagger UI) and <code>/redoc</code> (ReDoc).</p>
+
+          <h3>Running the API</h3>
+          <pre><code>uv run raggit serve
+uv run raggit serve --host 0.0.0.0 --port 8000
+uv run raggit serve --no-watcher  # API only, no file watcher</code></pre>
+
+          <h3>Endpoints</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Path</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/health</code></td>
+                <td>Health check.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/config</code></td>
+                <td>Get current runtime configuration.</td>
+              </tr>
+              <tr>
+                <td><code>POST</code></td>
+                <td><code>/config</code></td>
+                <td>Update and persist configuration to the env file.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/status</code></td>
+                <td>Overall status: document counts and active collections.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/documents</code></td>
+                <td>List indexed documents with optional filters.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/documents/{id}</code></td>
+                <td>Get a single document.</td>
+              </tr>
+              <tr>
+                <td><code>DELETE</code></td>
+                <td><code>/documents/{id}</code></td>
+                <td>Hard-delete a document and its chunks/vectors.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/documents/{id}/chunks</code></td>
+                <td>List chunks for a document.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/chunks/{id}</code></td>
+                <td>Get a single chunk.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/logs</code></td>
+                <td>Structured audit log entries with optional filters.</td>
+              </tr>
+              <tr>
+                <td><code>POST</code></td>
+                <td><code>/query</code></td>
+                <td>Run a hybrid retrieval query and optionally generate an answer.</td>
+              </tr>
+              <tr>
+                <td><code>POST</code></td>
+                <td><code>/ingest</code></td>
+                <td>Trigger a one-time ingestion run.</td>
+              </tr>
+              <tr>
+                <td><code>GET</code></td>
+                <td><code>/watcher/status</code></td>
+                <td>Check whether the watcher is running.</td>
+              </tr>
+              <tr>
+                <td><code>POST</code></td>
+                <td><code>/watcher/start</code></td>
+                <td>Start the storage watcher.</td>
+              </tr>
+              <tr>
+                <td><code>POST</code></td>
+                <td><code>/watcher/stop</code></td>
+                <td>Stop the storage watcher.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>Examples</h3>
+          <h4>Query</h4>
+          <pre><code>curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is raggit?"}'</code></pre>
+
+          <h4>Filtered query</h4>
+          <pre><code>curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "What is raggit?",
+    "tenant_id": "acme",
+    "tags": ["finance"],
+    "top_k": 10,
+    "generate_answer": false
+  }'</code></pre>
+
+          <h4>Update configuration</h4>
+          <pre><code>curl -X POST http://localhost:8000/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "config": {
+      "retrieval": {
+        "min_top_k": 10,
+        "max_top_k": 50,
+        "query_rewrite": "multi_query"
+      },
+      "safety": {
+        "groundedness_check": true
+      }
+    }
+  }'</code></pre>
+
+          <h4>Trigger ingestion</h4>
+          <pre><code>curl -X POST http://localhost:8000/ingest \
+  -H "Content-Type: application/json" \
+  -d '{"path": "./data/documents", "tenant_id": "acme"}'</code></pre>
+
+          <h4>List logs</h4>
+          <pre><code>curl "http://localhost:8000/logs?level=INFO&limit=50"</code></pre>
+
+          <h4>Delete a document</h4>
+          <pre><code>curl -X DELETE http://localhost:8000/documents/{document_id}</code></pre>
+
+          <h4>Watcher control</h4>
+          <pre><code>curl -X POST http://localhost:8000/watcher/start
+# ... later ...
+curl -X POST http://localhost:8000/watcher/stop</code></pre>
+
+          <div class="callout callout-note">
+            <div class="callout-title">Configuration persistence</div>
+            <p><code>POST /config</code> writes changes to <code>~/.config/raggit/raggit.env</code>. If <code>database_url</code> changes, the SQLAlchemy engine is recreated automatically. Other runtime services (such as the watcher) use the new config on the next operation; restart the watcher to apply storage changes immediately.</p>
+          </div>
+        </section>
+
+        <section id="cli">
+          <h2>CLI Reference</h2>
+          <p>The <code>raggit</code> CLI is the primary interface for setup, ingestion, watching, and querying.</p>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Command</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>raggit setup</code></td>
+                <td>Interactive configuration for local, S3, GCS, and Azure backends.</td>
+              </tr>
+              <tr>
+                <td><code>raggit serve [path]</code></td>
+                <td>Run the long-running service. Starts the FastAPI server and watches storage, indexing changes automatically.</td>
+              </tr>
+              <tr>
+                <td><code>raggit ingest &lt;path&gt;</code></td>
+                <td>One-time ingestion with a progress bar. Path is optional for cloud storage.</td>
+              </tr>
+              <tr>
+                <td><code>raggit watch &lt;path&gt;</code></td>
+                <td>Continuously watch and index with live event indicators.</td>
+              </tr>
+              <tr>
+                <td><code>raggit query "&lt;question&gt;"</code></td>
+                <td>Ask a question; shows status spinners, chunk table, answer panel, and citation tree.</td>
+              </tr>
+              <tr>
+                <td><code>raggit status</code></td>
+                <td>Show indexed document status and active embedding collections.</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3>setup</h3>
+          <p>Writes <code>~/.config/raggit/raggit.env</code> and bootstraps the system. Exposes every configuration parameter as a CLI option.</p>
+          <pre><code>uv run raggit setup --help</code></pre>
+
+          <h3>serve</h3>
+          <pre><code>uv run raggit serve [PATH] [OPTIONS]</code></pre>
+          <p>Options: <code>--host</code>, <code>--port</code>, <code>--no-watcher</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code> (repeatable).</p>
+
+          <h3>ingest</h3>
+          <pre><code>uv run raggit ingest [PATH] [OPTIONS]</code></pre>
+          <p>Options: <code>--chunk-size</code>, <code>--chunk-overlap</code>, <code>--preserve-sections/--split-sections</code>, <code>--embedding-provider</code>, <code>--embedding-model</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code>.</p>
+
+          <h3>watch</h3>
+          <pre><code>uv run raggit watch [PATH] [OPTIONS]</code></pre>
+          <p>Options: <code>--poll-interval</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code>.</p>
+
+          <h3>query</h3>
+          <pre><code>uv run raggit query "&lt;question&gt;" [OPTIONS]</code></pre>
+          <p>Options include <code>--top-k</code>, <code>--min-top-k</code>, <code>--max-top-k</code>, <code>--top-k-ratio</code>, <code>--rrf-k</code>, <code>--source-prefix</code>, <code>--filename-prefix</code>, <code>--tenant</code>, <code>--tag</code>, <code>--document-id</code>, <code>--created-after</code>, <code>--created-before</code>, <code>--min-score</code>, <code>--rewrite</code>, <code>--multi-query-count</code>, <code>--parent-window</code>, <code>--reranker/--no-reranker</code>, <code>--reranker-model</code>, <code>--reranker-top-n</code>, <code>--refuse-on-empty/--no-refuse-on-empty</code>, <code>--refuse-on-low-score/--no-refuse-on-low-score</code>, <code>--min-answer-score</code>, <code>--groundedness-check/--no-groundedness-check</code>, <code>--pii-redaction/--no-pii-redaction</code>, <code>--prompt-injection-hardening/--no-prompt-injection-hardening</code>, and <code>--no-llm</code>.</p>
+
+          <h3>status</h3>
+          <pre><code>uv run raggit status</code></pre>
+          <p>Shows a table of indexed documents and active embedding collections.</p>
+        </section>
+
+        <section id="storage-backends">
+          <h2>Storage Backends</h2>
+          <p>raggit supports local filesystem, S3, Google Cloud Storage, and Azure Blob Storage. Remote backends are installed as optional extras to keep the base install small.</p>
+
+          <h3>Local filesystem</h3>
+          <p>The default backend. Set <code>STORAGE_SOURCE_TYPE=local</code> and <code>STORAGE_URI</code> to a directory path. The directory is created automatically if it does not exist. Changes are detected instantly via OS-native events.</p>
+
+          <h3>AWS S3</h3>
+          <p>Install the S3 extra:</p>
+          <pre><code>uv pip install 'raggit[s3]'</code></pre>
+          <p>Then run setup with S3 options:</p>
+          <pre><code>uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type s3 \
+  --storage-uri s3://my-bucket/documents \
+  --storage-bucket my-bucket \
+  --storage-prefix documents \
+  --storage-region us-east-1 \
+  --aws-access-key-id $AWS_ACCESS_KEY_ID \
+  --aws-secret-access-key $AWS_SECRET_ACCESS_KEY \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY</code></pre>
+
+          <h3>Google Cloud Storage</h3>
+          <p>Install the GCS extra:</p>
+          <pre><code>uv pip install 'raggit[gcs]'</code></pre>
+          <pre><code>uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type gcs \
+  --storage-uri gs://my-bucket/documents \
+  --storage-bucket my-bucket \
+  --storage-prefix documents \
+  --gcs-service-account-path /path/to/service-account.json \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY</code></pre>
+
+          <h3>Azure Blob Storage</h3>
+          <p>Install the Azure extra:</p>
+          <pre><code>uv pip install 'raggit[azure]'</code></pre>
+          <pre><code>uv run raggit setup \
+  --database-url postgresql+asyncpg://raggit:raggit@localhost:5433/raggit \
+  --qdrant-url http://localhost:6333 \
+  --storage-source-type azure_blob \
+  --storage-uri azure://my-container/documents \
+  --storage-container my-container \
+  --storage-prefix documents \
+  --azure-connection-string $AZURE_STORAGE_CONNECTION_STRING \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key $OPENAI_API_KEY</code></pre>
+
+          <div class="callout callout-tip">
+            <div class="callout-title">Cloud watcher</div>
+            <p>Cloud storage watchers use periodic polling and snapshot diffing instead of native push notifications. This keeps the implementation portable across providers without requiring SQS, Pub/Sub, or Event Grid.</p>
+          </div>
+        </section>
+
+        <section id="configuration">
+          <h2>Configuration</h2>
+          <p>Configuration is loaded from environment variables and a <code>~/.config/raggit/raggit.env</code> file generated by <code>raggit setup</code>. The setup command writes the file with <code>0600</code> permissions.</p>
+
+          <h3 id="environment-variables">Environment variables</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Default</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>DATABASE_URL</code></td><td><code>postgresql+asyncpg://raggit:raggit@localhost:5433/raggit</code></td><td>PostgreSQL connection string.</td></tr>
+              <tr><td><code>QDRANT_URL</code></td><td><code>http://localhost:6333</code></td><td>Qdrant URL.</td></tr>
+              <tr><td><code>QDRANT_COLLECTION</code></td><td><code>raggit_chunks</code></td><td>Base Qdrant collection name. Actual collection is model-scoped.</td></tr>
+              <tr><td><code>QDRANT_API_KEY</code></td><td><code>None</code></td><td>Qdrant API key, if required.</td></tr>
+              <tr><td><code>LOG_LEVEL</code></td><td><code>INFO</code></td><td>Log level for console output.</td></tr>
+              <tr><td><code>CHUNK_SIZE</code></td><td><code>1024</code></td><td>Target chunk size in tokens.</td></tr>
+              <tr><td><code>CHUNK_OVERLAP</code></td><td><code>0</code></td><td>Overlap between chunks in tokens.</td></tr>
+              <tr><td><code>CHUNKING_DEDUP_ENABLED</code></td><td><code>true</code></td><td>Remove near-duplicate chunks.</td></tr>
+              <tr><td><code>CHUNKING_DEDUP_SIMILARITY</code></td><td><code>0.92</code></td><td>Jaccard similarity threshold for dedup.</td></tr>
+              <tr><td><code>CHUNKING_FORMAT_AWARE</code></td><td><code>true</code></td><td>Use format-aware chunk boundaries.</td></tr>
+              <tr><td><code>CHUNKING_PRESERVE_SECTIONS</code></td><td><code>true</code></td><td>Keep detected sections whole when possible.</td></tr>
+              <tr><td><code>MIN_TOP_K</code></td><td><code>5</code></td><td>Minimum retrieved chunks.</td></tr>
+              <tr><td><code>MAX_TOP_K</code></td><td><code>50</code></td><td>Maximum retrieved chunks.</td></tr>
+              <tr><td><code>TOP_K_RATIO</code></td><td><code>0.01</code></td><td>Fraction of total chunks used to scale top-k.</td></tr>
+              <tr><td><code>RRF_K</code></td><td><code>60</code></td><td>Reciprocal rank fusion constant.</td></tr>
+              <tr><td><code>RETRIEVAL_PARENT_WINDOW</code></td><td><code>0</code></td><td>Expand hits by +/- N sibling chunks.</td></tr>
+              <tr><td><code>RETRIEVAL_MIN_SCORE</code></td><td><code>None</code></td><td>Drop chunks below this score.</td></tr>
+              <tr><td><code>RETRIEVAL_QUERY_REWRITE</code></td><td><code>none</code></td><td>Query rewrite: <code>none</code>, <code>multi_query</code>, <code>hyde</code>.</td></tr>
+              <tr><td><code>RETRIEVAL_MULTI_QUERY_COUNT</code></td><td><code>3</code></td><td>Variants for <code>multi_query</code>.</td></tr>
+              <tr><td><code>RETRIEVAL_TRAVERSAL_ENABLED</code></td><td><code>true</code></td><td>Relevance-chain traversal.</td></tr>
+              <tr><td><code>RETRIEVAL_TRAVERSAL_MAX_STEPS</code></td><td><code>10</code></td><td>Max traversal steps.</td></tr>
+              <tr><td><code>RETRIEVAL_TRAVERSAL_MIN_SCORE</code></td><td><code>0.01</code></td><td>Min score to continue traversal.</td></tr>
+              <tr><td><code>RETRIEVAL_TRAVERSAL_DROP_RATIO</code></td><td><code>0.5</code></td><td>Score ratio that stops traversal.</td></tr>
+              <tr><td><code>RERANKER_ENABLED</code></td><td><code>false</code></td><td>Cross-encoder reranking.</td></tr>
+              <tr><td><code>RERANKER_MODEL</code></td><td><code>BAAI/bge-reranker-base</code></td><td>Reranker model name.</td></tr>
+              <tr><td><code>RERANKER_TOP_N</code></td><td><code>20</code></td><td>Candidates to rerank.</td></tr>
+              <tr><td><code>EMBEDDING_PROVIDER</code></td><td><code>sentence-transformers</code></td><td>Embedding provider.</td></tr>
+              <tr><td><code>EMBEDDING_MODEL</code></td><td><code>BAAI/bge-small-en-v1.5</code></td><td>Embedding model name.</td></tr>
+              <tr><td><code>EMBEDDING_API_KEY</code></td><td><code>None</code></td><td>API key for remote embedding provider.</td></tr>
+              <tr><td><code>EMBEDDING_BASE_URL</code></td><td><code>None</code></td><td>OpenAI-compatible embedding base URL.</td></tr>
+              <tr><td><code>EMBEDDING_BATCH_SIZE</code></td><td><code>32</code></td><td>Texts per embedding batch.</td></tr>
+              <tr><td><code>LLM_PROVIDER</code></td><td><code>openai</code></td><td>LLM provider: <code>openai</code> or <code>ollama</code>.</td></tr>
+              <tr><td><code>LLM_MODEL</code></td><td><code>gpt-4o-mini</code></td><td>Model name.</td></tr>
+              <tr><td><code>LLM_BASE_URL</code></td><td><code>None</code></td><td>OpenAI-compatible LLM base URL.</td></tr>
+              <tr><td><code>LLM_API_KEY</code></td><td><code>None</code></td><td>LLM API key.</td></tr>
+              <tr><td><code>LLM_TEMPERATURE</code></td><td><code>0.1</code></td><td>Sampling temperature.</td></tr>
+              <tr><td><code>LLM_MAX_TOKENS</code></td><td><code>2048</code></td><td>Max response tokens.</td></tr>
+              <tr><td><code>STORAGE_SOURCE_TYPE</code></td><td><code>local</code></td><td>Storage backend: <code>local</code>, <code>s3</code>, <code>gcs</code>, <code>azure_blob</code>.</td></tr>
+              <tr><td><code>STORAGE_URI</code></td><td><code>./data/documents</code></td><td>Storage URI or local path.</td></tr>
+              <tr><td><code>STORAGE_BUCKET</code></td><td><code>None</code></td><td>S3/GCS bucket name.</td></tr>
+              <tr><td><code>STORAGE_CONTAINER</code></td><td><code>None</code></td><td>Azure container name.</td></tr>
+              <tr><td><code>STORAGE_PREFIX</code></td><td><code>None</code></td><td>Object prefix or folder.</td></tr>
+              <tr><td><code>STORAGE_REGION</code></td><td><code>None</code></td><td>S3 region.</td></tr>
+              <tr><td><code>STORAGE_AWS_ACCESS_KEY_ID</code></td><td><code>None</code></td><td>AWS access key ID.</td></tr>
+              <tr><td><code>STORAGE_AWS_SECRET_ACCESS_KEY</code></td><td><code>None</code></td><td>AWS secret access key.</td></tr>
+              <tr><td><code>STORAGE_GCS_SERVICE_ACCOUNT_PATH</code></td><td><code>None</code></td><td>GCS service account JSON path.</td></tr>
+              <tr><td><code>STORAGE_AZURE_CONNECTION_STRING</code></td><td><code>None</code></td><td>Azure Blob connection string.</td></tr>
+              <tr><td><code>STORAGE_POLL_INTERVAL_SECONDS</code></td><td><code>30</code></td><td>Poll interval for cloud watchers.</td></tr>
+              <tr><td><code>SAFETY_REFUSE_ON_EMPTY</code></td><td><code>true</code></td><td>Refuse when no chunks retrieved.</td></tr>
+              <tr><td><code>SAFETY_REFUSE_ON_LOW_SCORE</code></td><td><code>true</code></td><td>Refuse when scores are low.</td></tr>
+              <tr><td><code>SAFETY_MIN_ANSWER_SCORE</code></td><td><code>0.01</code></td><td>Minimum answer score.</td></tr>
+              <tr><td><code>SAFETY_GROUNDEDNESS_CHECK</code></td><td><code>true</code></td><td>Groundedness check.</td></tr>
+              <tr><td><code>SAFETY_PII_REDACTION</code></td><td><code>false</code></td><td>Redact PII before embedding.</td></tr>
+              <tr><td><code>SAFETY_PROMPT_INJECTION_HARDENING</code></td><td><code>true</code></td><td>Harden chunks against prompt injection.</td></tr>
+              <tr><td><code>DEFAULT_TENANT_ID</code></td><td><code>None</code></td><td>Default tenant id.</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="docker">
+          <h2>Docker Deployment</h2>
+          <p>Build and run the entire stack with one command:</p>
+
+          <pre><code>docker compose up -d</code></pre>
+
+          <p>This starts:</p>
+          <ul>
+            <li><code>raggit-postgres</code> on port <code>5433</code></li>
+            <li><code>raggit-qdrant</code> on ports <code>6333</code> and <code>6334</code></li>
+            <li><code>raggit-app</code> running <code>raggit serve</code> with the FastAPI server on port <code>8000</code> and the watcher enabled by default</li>
+          </ul>
+
+          <p>Mount your documents into <code>./data/documents</code>. The container entrypoint applies Alembic migrations before starting the service.</p>
+
+          <h3>Useful commands</h3>
+          <pre><code># View logs
+docker compose logs -f raggit
+
+# Run one-time ingestion inside the container
+docker compose exec raggit raggit ingest
+
+# Run a query
+docker compose exec raggit raggit query "What is raggit?"
+
+# Use the HTTP API from the host
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is raggit?"}'
+
+# Stop everything
+docker compose down</code></pre>
+        </section>
+
+        <section id="development">
+          <h2>Development</h2>
+          <p>raggit uses <code>uv</code> for dependency management and <code>pytest</code> for testing. The default dependency group includes dev tools and all cloud SDKs.</p>
+
+          <pre><code># Install dependencies
+uv sync
+
+# Run linting
+uv run ruff check .
+
+# Run type checking
+uv run mypy raggit
+
+# Run tests
+uv run pytest</code></pre>
+
+          <h3>Project structure</h3>
+          <pre><code>raggit/
+  api/            # Pydantic models, public API types, and FastAPI server
+  cli/            # Typer CLI commands
+  core/           # Configuration, logging, audit, watcher service
+  db/             # SQLAlchemy models, repositories, sessions, vector store
+  ingestion/      # Parsing, chunking, cleaning, embedding, indexer
+  llm/            # LLM providers and answer augmentation
+  retrieval/      # Search, RRF, reranker, safety
+  storage/        # Storage backends and factory</code></pre>
+
+          <h3>Adding a storage backend</h3>
+          <ol>
+            <li>Subclass <code>raggit.storage.base.Storage</code>.</li>
+            <li>Implement <code>list_files</code>, <code>read_file</code>, <code>file_exists</code>, <code>compute_hash</code>, <code>watch</code>, and <code>close</code>.</li>
+            <li>Register the backend in <code>raggit.storage.factory.create_storage</code>.</li>
+            <li>Add corresponding fields to <code>raggit.api.models.StorageConfig</code> if needed.</li>
+            <li>Add tests mirroring <code>tests/test_storage_s3.py</code>.</li>
+          </ol>
+        </section>
+
+        <section id="troubleshooting">
+          <h2>Troubleshooting</h2>
+
+          <h3>Watcher is not detecting local file changes</h3>
+          <ul>
+            <li>Verify you are running <code>raggit serve</code> or <code>raggit watch</code>.</li>
+            <li>Ensure the watched path is the exact directory where files are created.</li>
+            <li>Network filesystems (NFS, some Docker volumes) may not emit reliable filesystem events. Use host paths when possible.</li>
+          </ul>
+
+          <h3>Initial sync is slow</h3>
+          <ul>
+            <li>The first sync must read, parse, chunk, and embed every file. Subsequent syncs use the stat snapshot and skip unchanged files.</li>
+            <li>Enable the sentence-transformers cache and ensure you have enough CPU/GPU for embedding.</li>
+          </ul>
+
+          <h3>Queries return no results</h3>
+          <ul>
+            <li>Check <code>raggit status</code> to confirm documents are <code>completed</code>.</li>
+            <li>Verify the active embedding collection in <code>embedding_collections</code> matches the model you queried with.</li>
+            <li>Try lowering <code>--min-score</code> or disabling <code>--refuse-on-empty</code> temporarily.</li>
+          </ul>
+
+          <h3>Cloud watcher misses events</h3>
+          <ul>
+            <li>Cloud watchers poll by default. Decrease <code>STORAGE_POLL_INTERVAL_SECONDS</code> if you need faster detection.</li>
+            <li>For true real-time cloud watching, route provider events to a message queue and extend the watcher to consume it.</li>
+          </ul>
+
+          <h3>Permission denied on config file</h3>
+          <ul>
+            <li><code>raggit setup</code> writes <code>~/.config/raggit/raggit.env</code> with <code>0600</code> permissions. If you created it manually, ensure it is readable by your user.</li>
+          </ul>
+        </section>
+
+        <section id="license">
+          <h2>License</h2>
+          <p>raggit is released under the MIT License.</p>
+        </section>
+
+        <a href="#overview" class="back-to-top">Back to top</a>
+      </article>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
