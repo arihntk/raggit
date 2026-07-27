@@ -93,6 +93,7 @@
           <a href="#retrieval" class="nav-link">Retrieval Pipeline</a>
           <a href="#watcher" class="nav-link">Watcher & Indexing</a>
           <a href="#api" class="nav-link">HTTP API</a>
+          <a href="#evaluation" class="nav-link">Evaluation</a>
           <a href="#cli" class="nav-link">CLI Reference</a>
           <a href="#storage-backends" class="nav-link">Storage Backends</a>
           <a href="#configuration" class="nav-link">Configuration</a>
@@ -160,6 +161,7 @@
             <li><strong>Document lifecycle status</strong> tracks pending, indexing, parsed, chunked, embedded, completed, failed, and deleted states.</li>
             <li><strong>Async-first</strong> architecture using asyncpg, async Qdrant client, and async cloud SDKs.</li>
             <li><strong>FastAPI HTTP API</strong> with interactive <code>/docs</code> Swagger UI for every operation: query, manage documents, inspect chunks and logs, update configuration, trigger ingestion, and control the watcher.</li>
+            <li><strong>Evaluation framework</strong> with retrieval metrics (recall@k, precision@k, MRR, NDCG@k, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.</li>
           </ul>
         </section>
 
@@ -734,6 +736,85 @@ curl -X POST http://localhost:8000/watcher/stop</code></pre>
           </div>
         </section>
 
+        <section id="evaluation">
+          <h2>Evaluation</h2>
+          <p>raggit includes a built-in evaluation framework for measuring retrieval and answer quality against annotated datasets. You can run evaluations from the CLI or the HTTP API, and export reports as JSON or Markdown.</p>
+
+          <h3>Dataset format</h3>
+          <p>Datasets are JSON or YAML files containing test cases. Each test case has a query, optional filters, expected chunk IDs, expected answer, and tags.</p>
+
+          <pre><code>name: my-eval
+version: "1.0.0"
+metrics:
+  - retrieval_recall@k
+  - retrieval_mrr
+  - answer_contains
+  - answer_semantic_similarity
+k_values: [5, 10]
+tests:
+  - id: q1
+    query: "What is raggit?"
+    expected_chunk_ids:
+      - 11111111-1111-1111-1111-111111111111
+    expected_answer: "raggit is a production-grade RAG system"
+    tags: [basic]</code></pre>
+
+          <h3>Metrics</h3>
+          <table>
+            <thead>
+              <tr><th>Metric</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>retrieval_recall@k</code></td><td>Fraction of relevant chunks in top-k.</td></tr>
+              <tr><td><code>retrieval_precision@k</code></td><td>Fraction of top-k chunks that are relevant.</td></tr>
+              <tr><td><code>retrieval_mrr</code></td><td>Reciprocal rank of the first relevant chunk.</td></tr>
+              <tr><td><code>retrieval_ndcg@k</code></td><td>Normalized discounted cumulative gain at k.</td></tr>
+              <tr><td><code>retrieval_hit_rate@k</code></td><td>1 if any relevant chunk is in top-k.</td></tr>
+              <tr><td><code>answer_exact_match</code></td><td>Case-insensitive exact match.</td></tr>
+              <tr><td><code>answer_contains</code></td><td>Expected answer text appears in generated answer.</td></tr>
+              <tr><td><code>answer_semantic_similarity</code></td><td>Cosine similarity of embedding vectors.</td></tr>
+              <tr><td><code>answer_llm_judge</code></td><td>LLM scores answer quality 0-1 with reasoning.</td></tr>
+              <tr><td><code>groundedness</code></td><td>Whether the answer is supported by retrieved chunks.</td></tr>
+              <tr><td><code>latency_ms</code></td><td>End-to-end query latency.</td></tr>
+              <tr><td><code>refusal_accuracy</code></td><td>Whether refusal behavior matches expectation.</td></tr>
+            </tbody>
+          </table>
+
+          <h3>CLI</h3>
+          <pre><code># Generate an empty dataset template
+uv run raggit eval --generate --name my-eval
+
+# Run evaluation and print a console report
+uv run raggit eval my-eval.yaml
+
+# Save a JSON or Markdown report
+uv run raggit eval my-eval.yaml --output report.json
+uv run raggit eval my-eval.yaml --output report.md</code></pre>
+
+          <h3>HTTP API</h3>
+          <pre><code>curl -X POST http://localhost:8000/eval/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset": {
+      "name": "my-eval",
+      "metrics": ["retrieval_recall@k", "retrieval_mrr"],
+      "k_values": [5],
+      "tests": [
+        {
+          "id": "q1",
+          "query": "What is raggit?",
+          "expected_chunk_ids": ["11111111-1111-1111-1111-111111111111"]
+        }
+      ]
+    }
+  }'</code></pre>
+
+          <div class="callout callout-tip">
+            <div class="callout-title">Tip</div>
+            <p>Use evaluation runs after changing chunking, embedding, retrieval, or reranking settings to measure the impact on real queries before deploying to production.</p>
+          </div>
+        </section>
+
         <section id="cli">
           <h2>CLI Reference</h2>
           <p>The <code>raggit</code> CLI is the primary interface for setup, ingestion, watching, and querying.</p>
@@ -770,6 +851,14 @@ curl -X POST http://localhost:8000/watcher/stop</code></pre>
                 <td><code>raggit status</code></td>
                 <td>Show indexed document status and active embedding collections.</td>
               </tr>
+              <tr>
+                <td><code>raggit chunks &lt;document&gt;</code></td>
+                <td>List chunks for a document by UUID or filename.</td>
+              </tr>
+              <tr>
+                <td><code>raggit eval &lt;dataset&gt;</code></td>
+                <td>Run an evaluation dataset and print or save a report.</td>
+              </tr>
             </tbody>
           </table>
 
@@ -793,9 +882,17 @@ curl -X POST http://localhost:8000/watcher/stop</code></pre>
           <pre><code>uv run raggit query "&lt;question&gt;" [OPTIONS]</code></pre>
           <p>Options include <code>--top-k</code>, <code>--min-top-k</code>, <code>--max-top-k</code>, <code>--top-k-ratio</code>, <code>--rrf-k</code>, <code>--source-prefix</code>, <code>--filename-prefix</code>, <code>--tenant</code>, <code>--tag</code>, <code>--document-id</code>, <code>--created-after</code>, <code>--created-before</code>, <code>--min-score</code>, <code>--rewrite</code>, <code>--multi-query-count</code>, <code>--parent-window</code>, <code>--reranker/--no-reranker</code>, <code>--reranker-model</code>, <code>--reranker-top-n</code>, <code>--refuse-on-empty/--no-refuse-on-empty</code>, <code>--refuse-on-low-score/--no-refuse-on-low-score</code>, <code>--min-answer-score</code>, <code>--groundedness-check/--no-groundedness-check</code>, <code>--pii-redaction/--no-pii-redaction</code>, <code>--prompt-injection-hardening/--no-prompt-injection-hardening</code>, and <code>--no-llm</code>.</p>
 
+          <h3>chunks</h3>
+          <pre><code>uv run raggit chunks &lt;document-id&gt; [OPTIONS]</code></pre>
+          <p>Options: <code>--filename</code> to look up by filename, <code>--full</code> to show full content.</p>
+
           <h3>status</h3>
           <pre><code>uv run raggit status</code></pre>
           <p>Shows a table of indexed documents and active embedding collections.</p>
+
+          <h3>eval</h3>
+          <pre><code>uv run raggit eval &lt;dataset.yaml&gt; [OPTIONS]</code></pre>
+          <p>Options: <code>--generate</code>, <code>--name</code>, <code>--description</code>, <code>--metric</code> (repeatable), <code>--k</code> (repeatable), <code>--output</code>, <code>--output-format</code>, <code>--log-level</code>.</p>
         </section>
 
         <section id="storage-backends">
@@ -989,6 +1086,7 @@ uv run pytest</code></pre>
   cli/            # Typer CLI commands
   core/           # Configuration, logging, audit, watcher service
   db/             # SQLAlchemy models, repositories, sessions, vector store
+  eval/           # Evaluation framework: metrics, datasets, runner, reports
   ingestion/      # Parsing, chunking, cleaning, embedding, indexer
   llm/            # LLM providers and answer augmentation
   retrieval/      # Search, RRF, reranker, safety

@@ -21,6 +21,7 @@ raggit connects directly to local and remote object storage, automatically index
 - **Multiple storage backends** — local filesystem, S3, Google Cloud Storage, and Azure Blob Storage.
 - **OpenAI-compatible LLMs** — use OpenAI, Ollama, or any compatible provider for generation and embeddings.
 - **FastAPI HTTP API** — query, manage documents and chunks, inspect logs, update configuration, trigger ingestion, and control the watcher over HTTP.
+- **Evaluation framework** — run retrieval and answer-quality metrics (recall@k, MRR, NDCG, semantic similarity, LLM-as-judge, groundedness) against annotated datasets via CLI or HTTP API.
 
 ---
 
@@ -209,5 +210,17 @@ uv run raggit serve
      -H "Content-Type: application/json" \
      -d '{"query": "What is raggit?"}'
    ```
+
+9. **Evaluate the system**:
+
+   Create an empty evaluation dataset and fill it with annotated test cases:
+
+   ```bash
+   uv run raggit eval --generate --name my-eval
+   # edit my-eval.yaml
+   uv run raggit eval my-eval.yaml --output report.json
+   ```
+
+   raggit computes retrieval metrics (recall@k, precision@k, MRR, NDCG, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.
 
    See the [full documentation](https://raggit.pages.dev/) for cloud storage options, configuration reference, CLI details, and the complete API reference.
