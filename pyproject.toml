@@ -45,7 +45,9 @@ dependencies = [
 s3 = ["aiobotocore>=2.0"]
 gcs = ["google-cloud-storage>=2.0"]
 azure = ["azure-storage-blob>=12.0"]
+mcp = ["mcp>=1.28.0"]
 cloud = ["raggit[s3,gcs,azure]"]
+all = ["raggit[s3,gcs,azure,mcp]"]
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.25.0",
@@ -55,6 +57,7 @@ dev = [
     "aiobotocore>=2.0",
     "google-cloud-storage>=2.0",
     "azure-storage-blob>=12.0",
+    "mcp>=1.28.0",
 ]
 
 [dependency-groups]
@@ -67,6 +70,7 @@ dev = [
     "aiobotocore>=2.0",
     "google-cloud-storage>=2.0",
     "azure-storage-blob>=12.0",
+    "mcp>=1.28.0",
 ]
 
 [project.scripts]
@@ -126,6 +130,10 @@ module = [
     "yaml",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["raggit.mcp_server"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

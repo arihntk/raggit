@@ -875,6 +875,31 @@ async def run_eval(request: EvalRunRequest) -> EvalRunResponse:
 
 
 # ---------------------------------------------------------------------------
+# Optional MCP mount
+# ---------------------------------------------------------------------------
+
+
+def _mount_mcp() -> None:
+    """Mount the MCP SSE app at /mcp if the mcp extra is installed."""
+    try:
+        from raggit.mcp_server import get_sse_app
+    except ImportError:
+        return
+
+    import asyncio
+
+    try:
+        mcp_app = asyncio.run(get_sse_app())
+        app.mount("/mcp", mcp_app)
+    except RuntimeError:
+        # Avoid raising if mcp is not configured; leave the endpoint absent.
+        pass
+
+
+_mount_mcp()
+
+
+# ---------------------------------------------------------------------------
 # Public entry points
 # ---------------------------------------------------------------------------
 

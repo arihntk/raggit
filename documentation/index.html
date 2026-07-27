@@ -94,6 +94,7 @@
           <a href="#watcher" class="nav-link">Watcher & Indexing</a>
           <a href="#api" class="nav-link">HTTP API</a>
           <a href="#evaluation" class="nav-link">Evaluation</a>
+          <a href="#mcp" class="nav-link">MCP (optional)</a>
           <a href="#cli" class="nav-link">CLI Reference</a>
           <a href="#storage-backends" class="nav-link">Storage Backends</a>
           <a href="#configuration" class="nav-link">Configuration</a>
@@ -162,6 +163,7 @@
             <li><strong>Async-first</strong> architecture using asyncpg, async Qdrant client, and async cloud SDKs.</li>
             <li><strong>FastAPI HTTP API</strong> with interactive <code>/docs</code> Swagger UI for every operation: query, manage documents, inspect chunks and logs, update configuration, trigger ingestion, and control the watcher.</li>
             <li><strong>Evaluation framework</strong> with retrieval metrics (recall@k, precision@k, MRR, NDCG@k, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.</li>
+            <li><strong>Optional MCP server</strong> exposing the same core operations to MCP clients over stdio or SSE. Install with <code>raggit[mcp]</code>.</li>
           </ul>
         </section>
 
@@ -815,6 +817,47 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
           </div>
         </section>
 
+        <section id="mcp">
+          <h2>MCP Server (optional)</h2>
+          <p>raggit can expose its operations through the <a href="https://modelcontextprotocol.io/">Model Context Protocol (MCP)</a>. This lets MCP clients such as Claude Desktop, Cursor, or any other MCP host query documents, inspect status, run ingestion, and trigger evaluation runs.</p>
+
+          <h3>Installation</h3>
+          <p>MCP support is an optional extra so raggit still works when <code>mcp</code> is not installed.</p>
+          <pre><code>uv pip install 'raggit[mcp]'</code></pre>
+
+          <h3>CLI: stdio transport</h3>
+          <p>Run the MCP server over stdio for local MCP clients:</p>
+          <pre><code>uv run raggit mcp</code></pre>
+
+          <h3>HTTP API: SSE transport</h3>
+          <p>When the <code>mcp</code> extra is installed and <code>raggit serve</code> is running, the MCP server is mounted at <code>/mcp</code> using Server-Sent Events:</p>
+          <pre><code>curl -N http://localhost:8000/mcp</code></pre>
+
+          <h3>Exposed tools</h3>
+          <table>
+            <thead>
+              <tr><th>Tool</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>query</code></td><td>Ask a question with optional filters (tenant, tags, date range, document IDs).</td></tr>
+              <tr><td><code>get_status</code></td><td>Fetch runtime status and configuration.</td></tr>
+              <tr><td><code>list_documents</code></td><td>List indexed documents with optional filters.</td></tr>
+              <tr><td><code>get_document</code></td><td>Get a single document by UUID.</td></tr>
+              <tr><td><code>list_chunks</code></td><td>List chunks for a document.</td></tr>
+              <tr><td><code>get_chunk</code></td><td>Get a single chunk by UUID.</td></tr>
+              <tr><td><code>list_logs</code></td><td>List audit logs with filters.</td></tr>
+              <tr><td><code>get_config</code></td><td>Read the current configuration.</td></tr>
+              <tr><td><code>ingest</code></td><td>Trigger ingestion of a path or cloud prefix.</td></tr>
+              <tr><td><code>run_eval</code></td><td>Run an evaluation dataset and return metrics.</td></tr>
+            </tbody>
+          </table>
+
+          <div class="callout callout-note">
+            <div class="callout-title">Note</div>
+            <p>Every MCP operation goes through the same services as the HTTP API and CLI, so configuration, audit logging, and multi-tenancy work identically across all interfaces.</p>
+          </div>
+        </section>
+
         <section id="cli">
           <h2>CLI Reference</h2>
           <p>The <code>raggit</code> CLI is the primary interface for setup, ingestion, watching, and querying.</p>
@@ -833,7 +876,11 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
               </tr>
               <tr>
                 <td><code>raggit serve [path]</code></td>
-                <td>Run the long-running service. Starts the FastAPI server and watches storage, indexing changes automatically.</td>
+                <td>Run the long-running service. Starts the FastAPI server and watches storage, indexing changes automatically. The optional MCP SSE endpoint is available at <code>/mcp</code> when the <code>mcp</code> extra is installed.</td>
+              </tr>
+              <tr>
+                <td><code>raggit mcp [--transport stdio|sse] [--host ...] [--port ...]</code></td>
+                <td>Run the MCP server. Requires <code>raggit[mcp]</code>.</td>
               </tr>
               <tr>
                 <td><code>raggit ingest &lt;path&gt;</code></td>

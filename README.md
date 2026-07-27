@@ -22,6 +22,7 @@ raggit connects directly to local and remote object storage, automatically index
 - **OpenAI-compatible LLMs** — use OpenAI, Ollama, or any compatible provider for generation and embeddings.
 - **FastAPI HTTP API** — query, manage documents and chunks, inspect logs, update configuration, trigger ingestion, and control the watcher over HTTP.
 - **Evaluation framework** — run retrieval and answer-quality metrics (recall@k, MRR, NDCG, semantic similarity, LLM-as-judge, groundedness) against annotated datasets via CLI or HTTP API.
+- **Optional MCP server** — connect raggit to any MCP client via stdio or SSE after installing the `mcp` extra.
 
 ---
 
@@ -223,4 +224,15 @@ uv run raggit serve
 
    raggit computes retrieval metrics (recall@k, precision@k, MRR, NDCG, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.
 
-   See the [full documentation](https://raggit.pages.dev/) for cloud storage options, configuration reference, CLI details, and the complete API reference.
+10. **Connect via MCP (optional)**:
+
+    Install the `mcp` extra and start the MCP server:
+
+    ```bash
+    uv pip install 'raggit[mcp]'
+    uv run raggit mcp
+    ```
+
+    The MCP server is also mounted at `/mcp` on the FastAPI HTTP server when the `mcp` extra is installed. It exposes tools for query, status, documents, chunks, logs, ingestion, and evaluation.
+
+    See the [full documentation](https://raggit.pages.dev/) for cloud storage options, configuration reference, CLI details, API reference, and MCP usage.
