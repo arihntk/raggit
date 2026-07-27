@@ -38,6 +38,7 @@ dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.34.0",
     "python-multipart>=0.0.18",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
@@ -81,6 +82,7 @@ default-groups = ["dev"]
 [tool.ruff]
 target-version = "py314"
 line-length = 100
+exclude = ["alembic"]
 
 [tool.ruff.lint]
 select = [
@@ -121,6 +123,7 @@ module = [
     "azure.storage.blob.aio",
     "azure.storage.blob",
     "fitz",
+    "yaml",
 ]
 ignore_missing_imports = true
 
