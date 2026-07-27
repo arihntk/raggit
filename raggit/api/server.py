@@ -42,6 +42,14 @@ from raggit.db.models import ChunkModel, DocumentModel, LogModel
 from raggit.db.repository import ChunkRepository, DocumentRepository, EmbeddingCollectionRepository
 from raggit.db.session import AsyncSessionLocal, reset_engine
 from raggit.db.vector import VectorStore
+from raggit.eval import (
+    EvalDataset,
+    EvalReport,
+    EvalRunner,
+    load_dataset,
+    save_report,
+)
+from raggit.eval.reports import ReportFormatError
 from raggit.ingestion.embedder import create_embedder
 from raggit.ingestion.indexer import Indexer
 from raggit.llm.augmenter import augment_and_answer
@@ -187,6 +195,22 @@ class StatusResponse(BaseModel):
     total_documents: int
     documents: list[DocumentStatusResponse]
     collections: list[dict[str, Any]]
+
+
+class EvalRunRequest(BaseModel):
+    """Request body for running an evaluation dataset."""
+
+    dataset: EvalDataset | None = None
+    dataset_path: str | None = None
+    output_path: str | None = None
+    output_format: str | None = None
+
+
+class EvalRunResponse(BaseModel):
+    """Response from running an evaluation dataset."""
+
+    report: EvalReport
+    saved_to: str | None = None
 
 
 # Module-level watcher handle (single-process).
@@ -797,6 +821,57 @@ async def watcher_stop() -> WatcherStatusResponse:
         storage_type=storage_type,
         uri=uri,
     )
+
+
+# ---------------------------------------------------------------------------
+# Evaluation
+# ---------------------------------------------------------------------------
+
+
+@app.post("/eval/run", response_model=EvalRunResponse)
+async def run_eval(request: EvalRunRequest) -> EvalRunResponse:
+    """Run an evaluation dataset and return the full report.
+
+    Provide either an inline ``dataset`` or a ``dataset_path`` to a JSON/YAML
+    file on the server.
+    """
+    if request.dataset_path is not None:
+        dataset = load_dataset(request.dataset_path)
+    elif request.dataset is not None:
+        dataset = request.dataset
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either dataset or dataset_path",
+        )
+
+    if not dataset.tests:
+        raise HTTPException(
+            status_code=400,
+            detail="Dataset contains no test cases",
+        )
+
+    config = get_settings().rag_config
+    configure_logging(config.log_level)
+    runner = EvalRunner(config)
+    try:
+        report = await runner.run(dataset)
+    finally:
+        await runner.close()
+
+    saved_to: str | None = None
+    if request.output_path is not None:
+        try:
+            save_report(
+                report,
+                request.output_path,
+                format=request.output_format,
+            )
+            saved_to = request.output_path
+        except ReportFormatError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return EvalRunResponse(report=report, saved_to=saved_to)
 
 
 # ---------------------------------------------------------------------------
