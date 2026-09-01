@@ -63,11 +63,23 @@ def _apply_overrides(
     if tags:
         config.default_tags = tags
     if path is not None:
-        resolved_path = path.resolve()
-        if config.storage.source_type.value == "local" and not resolved_path.exists():
-            console.print(f"[red]Path does not exist: {resolved_path}[/red]")
-            raise typer.Exit(1)
-        config.storage.uri = str(resolved_path)
+        path_str = str(path)
+        if config.storage.source_type.value == "local":
+            resolved_path = path.resolve()
+            if not resolved_path.exists():
+                console.print(f"[red]Path does not exist: {resolved_path}[/red]")
+                raise typer.Exit(1)
+            config.storage.uri = str(resolved_path)
+        else:
+            # Cloud storage: handle cloud URIs without local Path resolution
+            from raggit.storage.factory import _apply_cloud_uri_to_config, _is_cloud_uri
+
+            if _is_cloud_uri(path_str):
+                _apply_cloud_uri_to_config(path_str, config.storage)
+            else:
+                # Plain prefix override for cloud
+                config.storage.prefix = path_str.strip("/")
+                config.storage.uri = path_str
 
 
 def register_serve(app: typer.Typer) -> None:

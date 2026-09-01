@@ -131,11 +131,25 @@ async def _ingest(
         raise typer.Exit(1)
 
     if path is not None:
-        resolved_path = path.resolve()
-        if storage_config.source_type.value == "local" and not resolved_path.exists():
-            console.print(f"[red]Path does not exist: {resolved_path}[/red]")
-            raise typer.Exit(1)
-        storage_config.uri = str(resolved_path)
+        path_str = str(path)
+        # Cloud URIs should not be resolved as local filesystem paths
+        if storage_config.source_type.value == "local":
+            resolved_path = path.resolve()
+            if not resolved_path.exists():
+                console.print(f"[red]Path does not exist: {resolved_path}[/red]")
+                raise typer.Exit(1)
+            storage_config.uri = str(resolved_path)
+        else:
+            # Cloud storage: allow s3://, gs://, azure:// URIs; otherwise treat as prefix
+            from raggit.storage.factory import _apply_cloud_uri_to_config, _is_cloud_uri
+
+            if _is_cloud_uri(path_str):
+                _apply_cloud_uri_to_config(path_str, storage_config)
+            else:
+                # For cloud, a plain path is interpreted as a prefix override
+                # Keep existing bucket/container, update prefix and uri
+                storage_config.prefix = path_str.strip("/")
+                storage_config.uri = path_str
     elif storage_config.source_type.value == "local":
         console.print("[red]A path is required for local storage.[/red]")
         raise typer.Exit(1)
@@ -146,13 +160,17 @@ async def _ingest(
     started_at = asyncio.get_event_loop().time()
     try:
         async with AsyncSessionLocal() as session, session.begin():
+            # Use raw path string for cloud URIs to avoid Path.resolve mangling
+            log_path = str(path) if path else storage_config.uri
+            if path is not None and storage_config.source_type.value == "local":
+                log_path = str(path.resolve())
             await log_event(
                 session,
                 level="INFO",
                 component="raggit.cli.ingest",
                 message="Ingestion started",
                 extra={
-                    "path": str(path.resolve()) if path else storage_config.uri,
+                    "path": log_path,
                     "storage_type": storage_config.source_type.value,
                 },
             )
@@ -181,7 +199,7 @@ async def _ingest(
                 component="raggit.cli.ingest",
                 message="Ingestion completed",
                 extra={
-                    "path": str(path.resolve()) if path else storage_config.uri,
+                    "path": log_path,
                     "duration_seconds": asyncio.get_event_loop().time() - started_at,
                 },
             )

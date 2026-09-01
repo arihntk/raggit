@@ -735,12 +735,22 @@ async def run_ingest(request: IngestRequest) -> IngestResponse:
         raise HTTPException(status_code=400, detail="No storage configured")
 
     if request.path is not None:
-        from pathlib import Path
+        path_str = request.path
+        if storage_config.source_type == SourceType.LOCAL:
+            from pathlib import Path
 
-        resolved = Path(request.path).expanduser().resolve()
-        if storage_config.source_type == SourceType.LOCAL and not resolved.exists():
-            raise HTTPException(status_code=400, detail=f"Path does not exist: {resolved}")
-        storage_config.uri = str(resolved)
+            resolved = Path(path_str).expanduser().resolve()
+            if not resolved.exists():
+                raise HTTPException(status_code=400, detail=f"Path does not exist: {resolved}")
+            storage_config.uri = str(resolved)
+        else:
+            from raggit.storage.factory import _apply_cloud_uri_to_config, _is_cloud_uri
+
+            if _is_cloud_uri(path_str):
+                _apply_cloud_uri_to_config(path_str, storage_config)
+            else:
+                storage_config.prefix = path_str.strip("/")
+                storage_config.uri = path_str
 
     storage = create_storage(storage_config)
     indexer = Indexer(storage, config)
@@ -823,12 +833,22 @@ async def watcher_start(request: WatcherStartRequest) -> WatcherStatusResponse:
             config.storage.poll_interval_seconds = request.poll_interval_seconds
 
         if request.path is not None and config.storage is not None:
-            from pathlib import Path
+            path_str = request.path
+            if config.storage.source_type == SourceType.LOCAL:
+                from pathlib import Path
 
-            resolved = Path(request.path).expanduser().resolve()
-            if config.storage.source_type == SourceType.LOCAL and not resolved.exists():
-                raise HTTPException(status_code=400, detail=f"Path does not exist: {resolved}")
-            config.storage.uri = str(resolved)
+                resolved = Path(path_str).expanduser().resolve()
+                if not resolved.exists():
+                    raise HTTPException(status_code=400, detail=f"Path does not exist: {resolved}")
+                config.storage.uri = str(resolved)
+            else:
+                from raggit.storage.factory import _apply_cloud_uri_to_config, _is_cloud_uri
+
+                if _is_cloud_uri(path_str):
+                    _apply_cloud_uri_to_config(path_str, config.storage)
+                else:
+                    config.storage.prefix = path_str.strip("/")
+                    config.storage.uri = path_str
 
         if config.storage is None:
             raise HTTPException(status_code=400, detail="No storage configured")
