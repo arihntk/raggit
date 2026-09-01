@@ -1,0 +1,34 @@
+name: example-ingestion-pipeline
+description: "Ingestion pipeline: parse\u2192chunk\u2192clean evaluation."
+version: 1.0.0
+kind: pipeline
+component: null
+pipeline: ingestion
+metrics:
+- pipeline_ingestion_success_rate
+k_values:
+- 5
+tests: []
+component_tests: []
+pipeline_tests:
+- id: ingest-1
+  pipeline: ingestion
+  query: null
+  documents:
+  - path: note.md
+    text: '# Hello
+
+      World content for testing pipeline ingestion.'
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: null
+  tags:
+  - example
+  metadata: {}

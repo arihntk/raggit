@@ -1,0 +1,33 @@
+name: example-retriever-eval
+description: "Example retriever component evaluation dataset \u2013 isolated tests\
+  \ for retriever."
+version: 1.0.0
+kind: component
+component: retriever
+pipeline: null
+metrics:
+- sanitizer_keyword_recall
+- rrf_fusion_quality
+- retrieval_recall@k
+k_values:
+- 5
+tests: []
+component_tests:
+- id: retriever-sanitize-1
+  component: retriever
+  input:
+    query: What is raggit?
+    ranked_lists:
+    - - 11111111-1111-1111-1111-111111111111
+    k: 60
+  expected:
+    expected_keywords:
+    - raggit
+    relevant:
+    - 11111111-1111-1111-1111-111111111111
+  tags:
+  - retriever
+  - sanitizer
+  - rrf
+  metadata: {}
+pipeline_tests: []

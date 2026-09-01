@@ -1,0 +1,31 @@
+name: example-retrieval-pipeline
+description: Retrieval pipeline evaluation without LLM.
+version: 1.0.0
+kind: pipeline
+component: null
+pipeline: retrieval
+metrics:
+- retrieval_recall@k
+- retrieval_mrr
+k_values:
+- 5
+tests: []
+component_tests: []
+pipeline_tests:
+- id: retrieve-1
+  pipeline: retrieval
+  query: What is hello?
+  documents: []
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: null
+  tags:
+  - example
+  metadata: {}

@@ -1,0 +1,252 @@
+name: raggit-comprehensive
+description: 'Comprehensive system evaluation covering every feature: ingestion, retrieval,
+  safety, filtering, MCP, latency, citations.'
+version: 1.0.0
+kind: system
+component: null
+pipeline: null
+metrics:
+- retrieval_recall@k
+- retrieval_precision@k
+- retrieval_mrr
+- retrieval_ndcg@k
+- retrieval_hit_rate@k
+- answer_exact_match
+- answer_contains
+- answer_semantic_similarity
+- answer_llm_judge
+- groundedness
+- refusal_accuracy
+- system_citation_precision
+- system_citation_recall
+- system_hallucination_rate
+- filter_tenant_accuracy
+- filter_tag_accuracy
+- filter_prefix_accuracy
+- latency_ms
+- system_latency_p50
+- system_latency_p95
+- system_audit_coverage
+- system_e2e_success
+k_values:
+- 5
+- 10
+tests:
+- id: sys-retrieval-basic
+  query: What is raggit?
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: raggit is a production-grade RAG system
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - retrieval
+  - basic
+  metadata: {}
+- id: sys-retrieval-precise
+  query: Explain hybrid search
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: hybrid search combines BM25 and semantic
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - retrieval
+  - precision
+  metadata: {}
+- id: sys-tenant-filter
+  query: What is raggit?
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: acme
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: acme
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - filter
+  - tenant
+  metadata: {}
+- id: sys-tag-filter
+  query: What is raggit?
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags:
+    - finance
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: finance
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - filter
+  - tag
+  metadata: {}
+- id: sys-prefix-filter
+  query: What is raggit?
+  filters:
+    source_uri_prefix: /data
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: data
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - filter
+  - prefix
+  metadata: {}
+- id: sys-refusal-empty
+  query: unknown nonsense query xyz
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: null
+  expected_refusal: true
+  judgement_criteria: null
+  tags:
+  - safety
+  - refusal
+  - empty
+  metadata: {}
+- id: sys-refusal-low-score
+  query: nonsense low score
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: null
+  expected_refusal: true
+  judgement_criteria: null
+  tags:
+  - safety
+  - refusal
+  - low_score
+  metadata: {}
+- id: sys-groundedness-pass
+  query: Explain chunking
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: chunking splits documents by sections
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - safety
+  - groundedness
+  metadata: {}
+- id: sys-citation
+  query: What is raggit?
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: raggit is a production-grade RAG system
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - citation
+  - system
+  metadata: {}
+- id: sys-latency
+  query: Quick query for latency
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: fast
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - latency
+  metadata: {}
+- id: sys-audit
+  query: Audit coverage test
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: audit
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - audit
+  metadata: {}
+- id: sys-mcp
+  query: MCP tool test
+  filters:
+    source_uri_prefix: null
+    filename_prefix: null
+    tenant_id: null
+    tags: []
+    document_ids: []
+    created_after: null
+    created_before: null
+  expected_chunk_ids: []
+  expected_answer: mcp
+  expected_refusal: false
+  judgement_criteria: null
+  tags:
+  - mcp
+  metadata: {}
+component_tests: []
+pipeline_tests: []

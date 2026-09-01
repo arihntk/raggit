@@ -1,0 +1,71 @@
+name: example-chunker-eval
+description: "Example chunker component evaluation dataset \u2013 isolated tests for\
+  \ chunker."
+version: 1.0.0
+kind: component
+component: chunker
+pipeline: null
+metrics:
+- chunker_section_preservation
+- chunker_function_boundary
+- chunker_dedup_effectiveness
+- chunker_word_count_accuracy
+k_values:
+- 5
+tests: []
+component_tests:
+- id: chunker-md-1
+  component: chunker
+  input:
+    text: '# Section A
+
+      Content A
+
+
+      ## Section B
+
+      Content B'
+    path: doc.md
+  expected:
+    expected_titles:
+    - Section A
+    - Section B
+  tags:
+  - chunker
+  - markdown
+  - section
+  metadata: {}
+- id: chunker-code-1
+  component: chunker
+  input:
+    text: "def hello():\n    pass\n\ndef world():\n    pass"
+    path: code.py
+  expected:
+    expected_function_titles:
+    - def hello
+    - def world
+  tags:
+  - chunker
+  - code
+  metadata: {}
+- id: chunker-dedup-1
+  component: chunker
+  input:
+    text: 'Hello world
+
+
+      Hello world
+
+
+      Unique content'
+    path: doc.txt
+    config:
+      chunking.dedup_enabled: true
+  expected:
+    expected_deduped_count: 2
+    original_count: 3
+  tags:
+  - chunker
+  - dedup
+  metadata: {}
+pipeline_tests: []

@@ -51,8 +51,14 @@ def _build_dataset(
     pipeline: PipelineType | None,
     comprehensive: bool,
     generate: bool,
+    golden_dataset: Path | None = None,
 ) -> EvalDataset:  # type: ignore[name-defined]
     from raggit.eval.models import EvalDataset
+
+    # If a custom golden dataset is provided without a main path, use it as the dataset
+    if path is None and golden_dataset is not None and not generate and not comprehensive:
+        # User wants to run eval directly on their custom golden dataset
+        return load_dataset(str(golden_dataset))
 
     if comprehensive:
         dataset = build_comprehensive_example()
@@ -66,7 +72,32 @@ def _build_dataset(
         raise typer.Exit(0)
 
     if path is not None:
-        return load_dataset(str(path))
+        dataset = load_dataset(str(path))
+        # Merge custom golden dataset if provided
+        if golden_dataset is not None:
+            try:
+                golden = load_dataset(str(golden_dataset))
+                # Merge golden tests into dataset (dedup by id)
+                existing_ids = {t.id for t in dataset.tests}
+                existing_comp = {t.id for t in dataset.component_tests}
+                existing_pipe = {t.id for t in dataset.pipeline_tests}
+                for t in golden.tests:
+                    if t.id not in existing_ids:
+                        dataset.tests.append(t)
+                for t in golden.component_tests:
+                    if t.id not in existing_comp:
+                        dataset.component_tests.append(t)
+                for t in golden.pipeline_tests:
+                    if t.id not in existing_pipe:
+                        dataset.pipeline_tests.append(t)
+                # Merge metrics
+                for m in golden.metrics:
+                    if m not in dataset.metrics:
+                        dataset.metrics.append(m)
+                console.print(f"[dim]Merged custom golden dataset {golden_dataset} ({len(golden.tests)} system, {len(golden.component_tests)} component, {len(golden.pipeline_tests)} pipeline tests)[/]")
+            except Exception as exc:
+                console.print(f"[yellow]Warning: could not merge golden dataset {golden_dataset}: {exc}[/]")
+        return dataset
 
     if generate:
         # Use explicit kind if given, else infer from component/pipeline
@@ -170,7 +201,7 @@ def register_eval(app: typer.Typer) -> None:
     def eval(
         path: Path | None = typer.Argument(
             None,
-            help="Path to an evaluation dataset (JSON or YAML).",
+            help="Path to an evaluation dataset (JSON or YAML). Use built-in golden with --golden-dataset eval_datasets/golden.yaml or your own file.",
             exists=False,
         ),
         generate: bool = typer.Option(
@@ -207,6 +238,19 @@ def register_eval(app: typer.Typer) -> None:
             "--k",
             help="K values for @k metrics when generating a dataset (repeatable).",
         ),
+        golden_dataset: Path | None = typer.Option(
+            None,
+            "--golden-dataset",
+            help="Path to a custom golden dataset YAML/JSON to merge or use as baseline (user-provided). "
+            "Example: --golden-dataset ./my-golden.yaml or --golden-dataset eval_datasets/golden.yaml",
+            exists=False,
+        ),
+        golden_report: Path | None = typer.Option(
+            None,
+            "--golden-report",
+            help="Path to a previous report JSON to diff against (shows Δ in terminal).",
+            exists=False,
+        ),
         output: Path | None = typer.Option(
             None, "--output", help="Path to save the evaluation report (JSON or Markdown)."
         ),
@@ -234,6 +278,13 @@ def register_eval(app: typer.Typer) -> None:
         raggit eval --generate --kind pipeline --pipeline ingestion
         raggit eval --comprehensive --name full-suite
         raggit eval --list-metrics
+
+        Golden datasets (built-in at eval_datasets/golden*.yaml):
+
+        \b
+        raggit eval eval_datasets/golden.yaml
+        raggit eval my-custom.yaml --golden-dataset eval_datasets/golden-system.yaml
+        raggit eval my.yaml --golden-dataset ./my-golden.yaml --golden-report ./prev-report.json
         """
         if list_metrics:
             _list_metrics()
@@ -249,8 +300,9 @@ def register_eval(app: typer.Typer) -> None:
             pipeline=pipeline,
             comprehensive=comprehensive,
             generate=generate,
+            golden_dataset=golden_dataset,
         )
-        asyncio.run(_run_eval(dataset, output, output_format, log_level))
+        asyncio.run(_run_eval(dataset, output, output_format, log_level, golden_report=golden_report))
 
 
 async def _run_eval(
@@ -258,6 +310,7 @@ async def _run_eval(
     output: Path | None,
     output_format: str | None,
     log_level: str | None,
+    golden_report: Path | None = None,
 ) -> None:
     from raggit.eval.models import EvalKind
 
@@ -266,6 +319,17 @@ async def _run_eval(
     if log_level is not None:
         config.log_level = log_level
     configure_logging(config.log_level)
+
+    # Load golden report for delta comparison if provided
+    golden_report_obj = None
+    if golden_report is not None:
+        try:
+            from raggit.eval.reports import load_report
+
+            golden_report_obj = load_report(str(golden_report))
+            console.print(f"[dim]Comparing against golden report: {golden_report}[/]")
+        except Exception as exc:
+            console.print(f"[yellow]Warning: could not load golden report {golden_report}: {exc}[/]")
 
     # Handle all-tiers: run each present tier sequentially and merge reports
     if dataset.kind == EvalKind.ALL:
@@ -362,7 +426,7 @@ async def _run_eval(
         finally:
             await runner.close()
 
-    render_console_report(report, console=console)
+    render_console_report(report, console=console, golden_report=golden_report_obj)
 
     if output is not None:
         try:

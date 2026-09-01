@@ -1,0 +1,22 @@
+name: example-watcher-eval
+description: "Example watcher component evaluation dataset \u2013 isolated tests for\
+  \ watcher."
+version: 1.0.0
+kind: component
+component: watcher
+pipeline: null
+metrics:
+- watcher_debounce_accuracy
+- watcher_file_stability
+k_values:
+- 5
+tests: []
+component_tests:
+- id: watcher-debounce-1
+  component: watcher
+  input: {}
+  expected: {}
+  tags:
+  - watcher
+  metadata: {}
+pipeline_tests: []

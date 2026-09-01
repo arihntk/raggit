@@ -1,0 +1,52 @@
+name: example-cleaner-eval
+description: "Example cleaner component evaluation dataset \u2013 isolated tests for\
+  \ cleaner."
+version: 1.0.0
+kind: component
+component: cleaner
+pipeline: null
+metrics:
+- cleaner_effectiveness
+- cleaner_unicode_normalization
+- cleaner_hyphenation_fix
+- cleaner_whitespace_collapse
+k_values:
+- 5
+tests: []
+component_tests:
+- id: cleaner-unicode-1
+  component: cleaner
+  input:
+    raw: "hello\_world"
+  expected:
+    expected_cleaned: hello world
+  tags:
+  - cleaner
+  - unicode
+  metadata: {}
+- id: cleaner-hyphen-1
+  component: cleaner
+  input:
+    raw: 'word-
+
+      word'
+  expected:
+    expected_cleaned: wordword
+  tags:
+  - cleaner
+  - hyphenation
+  metadata: {}
+- id: cleaner-ws-1
+  component: cleaner
+  input:
+    raw: "hello   world \n\n\n next"
+  expected:
+    expected_cleaned: 'hello world
+
+
+      next'
+  tags:
+  - cleaner
+  - whitespace
+  metadata: {}
+pipeline_tests: []

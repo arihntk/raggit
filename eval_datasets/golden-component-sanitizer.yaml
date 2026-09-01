@@ -1,0 +1,37 @@
+name: example-sanitizer-eval
+description: "Example sanitizer component evaluation dataset \u2013 isolated tests\
+  \ for sanitizer."
+version: 1.0.0
+kind: component
+component: sanitizer
+pipeline: null
+metrics:
+- sanitizer_keyword_recall
+- sanitizer_stopword_removal_rate
+k_values:
+- 5
+tests: []
+component_tests:
+- id: san-basic-1
+  component: sanitizer
+  input:
+    query: What is the capital of France?
+  expected:
+    expected_keywords:
+    - capital
+    - france
+  tags:
+  - sanitizer
+  - basic
+  metadata: {}
+- id: san-stop-1
+  component: sanitizer
+  input:
+    query: the and or but is this that
+  expected:
+    expected_keywords: []
+  tags:
+  - sanitizer
+  - stopword
+  metadata: {}
+pipeline_tests: []

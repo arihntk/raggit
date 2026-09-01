@@ -1,0 +1,24 @@
+name: example-storage-eval
+description: "Example storage component evaluation dataset \u2013 isolated tests for\
+  \ storage."
+version: 1.0.0
+kind: component
+component: storage
+pipeline: null
+metrics:
+- storage_path_traversal_block_rate
+k_values:
+- 5
+tests: []
+component_tests:
+- id: storage-traversal-1
+  component: storage
+  input:
+    path: /tmp/../etc/passwd
+  expected:
+    should_block: true
+  tags:
+  - storage
+  - security
+  metadata: {}
+pipeline_tests: []

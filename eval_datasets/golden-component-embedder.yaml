@@ -1,0 +1,37 @@
+name: example-embedder-eval
+description: "Example embedder component evaluation dataset \u2013 isolated tests\
+  \ for embedder."
+version: 1.0.0
+kind: component
+component: embedder
+pipeline: null
+metrics:
+- embedder_cosine_accuracy
+- embedder_latency
+k_values:
+- 5
+tests: []
+component_tests:
+- id: emb-cosine-1
+  component: embedder
+  input:
+    texts:
+    - hello world
+    - hello world
+  expected: {}
+  tags:
+  - embedder
+  - cosine
+  metadata: {}
+- id: emb-latency-1
+  component: embedder
+  input:
+    texts:
+    - test sentence for latency
+    - another sentence
+  expected: {}
+  tags:
+  - embedder
+  - latency
+  metadata: {}
+pipeline_tests: []

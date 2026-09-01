@@ -1,0 +1,53 @@
+name: example-parser-eval
+description: "Example parser component evaluation dataset \u2013 isolated tests for\
+  \ parser."
+version: 1.0.0
+kind: component
+component: parser
+pipeline: null
+metrics:
+- parser_parse_success
+- parser_text_fidelity
+- parser_html_stripping
+k_values:
+- 5
+tests: []
+component_tests:
+- id: parser-txt-1
+  component: parser
+  input:
+    path: doc.txt
+    content_bytes: Hello world plain text
+  expected:
+    expected_text: Hello world plain text
+  tags:
+  - parser
+  - txt
+  metadata: {}
+- id: parser-md-1
+  component: parser
+  input:
+    path: doc.md
+    content_bytes: '# Title
+
+      Content'
+  expected:
+    expected_text: '# Title
+
+      Content'
+  tags:
+  - parser
+  - markdown
+  metadata: {}
+- id: parser-html-1
+  component: parser
+  input:
+    path: doc.html
+    content_bytes: <html><body><p>Hello</p><script>alert(1)</script></body></html>
+  expected:
+    expected_text: Hello
+  tags:
+  - parser
+  - html
+  metadata: {}
+pipeline_tests: []

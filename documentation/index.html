@@ -909,6 +909,38 @@ uv run raggit eval --list-metrics
 uv run raggit eval --generate --kind component --component pii --name pii-suite
 </code></pre>
 
+          <h3>Golden datasets – built-in & custom</h3>
+          <p>raggit ships <strong>golden datasets</strong> under <code>eval_datasets/</code> – curated ground-truth for every tier, committed to git so CI and teammates share the same baseline:</p>
+          <ul>
+            <li><code>eval_datasets/golden.yaml</code> / <code>golden-all-tiers.yaml</code> – all tiers, every component + pipeline + system (27+13 tests, 53 metrics)</li>
+            <li><code>eval_datasets/golden-system.yaml</code> – comprehensive system (12 tests, 22 metrics covering retrieval, filters, safety, citations, latency, MCP)</li>
+            <li><code>eval_datasets/golden-component-&lt;name&gt;.yaml</code> – per-primitive (parser 3 tests, chunker 3, cleaner 3, pii 3, injection 3, sanitizer 2, etc.)</li>
+            <li><code>eval_datasets/golden-pipeline-&lt;ingestion|retrieval|e2e&gt;.yaml</code> – ingestion and retrieval chains</li>
+          </ul>
+          <p>Run them directly:</p>
+          <pre><code>uv run raggit eval eval_datasets/golden.yaml
+uv run raggit eval eval_datasets/golden-component-chunker.yaml
+uv run raggit eval eval_datasets/golden-pipeline-ingestion.yaml
+uv run raggit eval eval_datasets/golden-system.yaml --output report.json</code></pre>
+          <p><strong>Custom golden dataset:</strong> add your own ground-truth and merge or diff:</p>
+          <pre><code># Create your own golden dataset (edit it with your queries & expected chunk IDs/answers)
+uv run raggit eval --generate --kind system --name my-golden
+# → my-golden.yaml  (fill in expected_chunk_ids, expected_answer, filters, tags)
+
+# Run your dataset merged with the built-in golden
+uv run raggit eval my-custom.yaml --golden-dataset eval_datasets/golden-system.yaml
+
+# Or use your custom golden as the sole dataset
+uv run raggit eval --golden-dataset ./my-golden.yaml
+
+# Use any dataset as golden
+uv run raggit eval eval_datasets/golden-component-pii.yaml --golden-dataset ./my-pii-golden.yaml
+
+# Compare current run against a previous JSON report (shows Δ in terminal)
+uv run raggit eval eval_datasets/golden-component-cleaner.yaml --output report.json
+uv run raggit eval eval_datasets/golden-component-cleaner.yaml --golden-report report.json</code></pre>
+          <p>The terminal report now renders a <strong>detailed per-tier breakdown</strong> (header with kind, summary with pass rate, aggregate table with Δ vs golden, per-test table with latency and key metric, component/pipeline details, answer & citation preview, and a final verdict). The same rich report is available via <code>--output report.md</code> and the HTTP API.</p>
+
           <h3>HTTP API – tier-aware</h3>
           <pre><code># Component
 curl -X POST http://localhost:8000/eval/run \

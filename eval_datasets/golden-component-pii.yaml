@@ -1,0 +1,49 @@
+name: example-pii-eval
+description: "Example pii component evaluation dataset \u2013 isolated tests for pii."
+version: 1.0.0
+kind: component
+component: pii
+pipeline: null
+metrics:
+- pii_redaction_recall
+- pii_redaction_precision
+- pii_redaction_f1
+k_values:
+- 5
+tests: []
+component_tests:
+- id: pii-email-1
+  component: pii
+  input:
+    text: Contact me at alice@example.com for details
+  expected:
+    expected_spans:
+    - alice@example.com
+  tags:
+  - pii
+  - email
+  metadata: {}
+- id: pii-phone-1
+  component: pii
+  input:
+    text: Call 555-123-4567
+  expected:
+    expected_spans:
+    - 555-123-4567
+  tags:
+  - pii
+  - phone
+  metadata: {}
+- id: pii-mixed-1
+  component: pii
+  input:
+    text: SSN 123-45-6789 and IP 192.168.1.1
+  expected:
+    expected_spans:
+    - 123-45-6789
+    - 192.168.1.1
+  tags:
+  - pii
+  - mixed
+  metadata: {}
+pipeline_tests: []
