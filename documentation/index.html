@@ -249,7 +249,7 @@ cp my-docs/*.pdf data/documents/</code></pre>
             </li>
           </ol>
 
-          <p>See the <a href="#api">HTTP API</a> and <a href="#storage-backends">storage backends</a> sections for more. The legacy <code>raggit watch</code> command is still available if you prefer live event indicators in the terminal.</p>
+          <p>See the <a href="#api">HTTP API</a> and <a href="#storage-backends">storage backends</a> sections for more. Live <code>+</code>/<code>-</code> file event indicators are now shown directly by <code>raggit serve</code>.</p>
         </section>
 
         <section id="architecture">
@@ -577,8 +577,8 @@ uv run raggit serve --log-level DEBUG --tenant acme --tag finance</code></pre>
           <h3>Cloud storage watching</h3>
           <p>S3, GCS, and Azure backends do not have a universal push-notification mechanism, so they use lightweight polling and snapshot diffing. The interval is configurable with <code>STORAGE_POLL_INTERVAL_SECONDS</code> (default 30 seconds). You can make cloud watching near-instant by routing provider events (S3 Event Notifications, GCS Pub/Sub, Azure Event Grid) into a queue that a future extension can consume.</p>
 
-          <h3>raggit watch (legacy mode)</h3>
-          <p><code>raggit watch</code> is preserved for users who want an explicit command with live <code>+</code>/<code>-</code> event indicators in the terminal. It uses the same <code>WatcherService</code> internally.</p>
+          <h3>Automatic & independent operation</h3>
+          <p>The watcher is now a single canonical implementation inside <code>WatcherService</code>. It starts automatically with <code>raggit serve</code> and via the FastAPI lifespan when running <code>uvicorn raggit.api.server:app</code> – no manual <code>POST /watcher/start</code> needed. The legacy <code>raggit watch</code> command has been removed; <code>raggit serve</code> now prints live <code>+</code>/<code>-</code> indicators itself. Disable the watcher with <code>raggit serve --no-watcher</code> or <code>RAGGIT_NO_AUTO_WATCHER=1</code>.</p>
 
           <div class="callout callout-tip">
             <div class="callout-title">Deployment tip</div>
@@ -887,10 +887,6 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
                 <td>One-time ingestion with a progress bar. Path is optional for cloud storage.</td>
               </tr>
               <tr>
-                <td><code>raggit watch &lt;path&gt;</code></td>
-                <td>Continuously watch and index with live event indicators.</td>
-              </tr>
-              <tr>
                 <td><code>raggit query "&lt;question&gt;"</code></td>
                 <td>Ask a question; shows status spinners, chunk table, answer panel, and citation tree.</td>
               </tr>
@@ -915,15 +911,11 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
 
           <h3>serve</h3>
           <pre><code>uv run raggit serve [PATH] [OPTIONS]</code></pre>
-          <p>Options: <code>--host</code>, <code>--port</code>, <code>--no-watcher</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code> (repeatable).</p>
+          <p>Options: <code>--host</code>, <code>--port</code>, <code>--poll-interval</code>, <code>--no-watcher</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code> (repeatable). The watcher runs automatically; no separate <code>raggit watch</code> needed. Removed <code>raggit watch</code> now shows a deprecation message directing to <code>raggit serve</code>.</p>
 
           <h3>ingest</h3>
           <pre><code>uv run raggit ingest [PATH] [OPTIONS]</code></pre>
           <p>Options: <code>--chunk-size</code>, <code>--chunk-overlap</code>, <code>--preserve-sections/--split-sections</code>, <code>--embedding-provider</code>, <code>--embedding-model</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code>.</p>
-
-          <h3>watch</h3>
-          <pre><code>uv run raggit watch [PATH] [OPTIONS]</code></pre>
-          <p>Options: <code>--poll-interval</code>, <code>--log-level</code>, <code>--tenant</code>, <code>--tag</code>.</p>
 
           <h3>query</h3>
           <pre><code>uv run raggit query "&lt;question&gt;" [OPTIONS]</code></pre>
@@ -1154,8 +1146,9 @@ uv run pytest</code></pre>
 
           <h3>Watcher is not detecting local file changes</h3>
           <ul>
-            <li>Verify you are running <code>raggit serve</code> or <code>raggit watch</code>.</li>
-            <li>Ensure the watched path is the exact directory where files are created.</li>
+            <li>Verify you are running <code>raggit serve</code> (the watcher is automatic – no separate <code>raggit watch</code> needed).</li>
+            <li>Ensure the watched path is the exact directory where files are created and that the watcher is not disabled via <code>--no-watcher</code> or <code>RAGGIT_NO_AUTO_WATCHER=1</code>.</li>
+            <li>Check <code>/watcher/status</code> to confirm the watcher is running; if not, start it via <code>POST /watcher/start</code> or restart <code>raggit serve</code>.</li>
             <li>Network filesystems (NFS, some Docker volumes) may not emit reliable filesystem events. Use host paths when possible.</li>
           </ul>
 

@@ -166,17 +166,38 @@ class S3Storage(Storage):
         on_event: FileEventCallback,
         poll_interval_seconds: float = 30.0,
     ) -> None:
-        """Poll S3 and emit events when objects change."""
+        """Poll S3 and emit events when objects change.
+
+        Runs indefinitely until the task is cancelled or :meth:`close` is
+        called. The loop is fully cancellable – ``CancelledError`` is not
+        swallowed so ``WatcherService`` can manage shutdown cleanly.
+        """
         previous: dict[str, StorageFile] = {}
-        for file in await self.list_files():
-            previous[file.path] = file
+        try:
+            for file in await self.list_files():
+                previous[file.path] = file
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Failed to list initial S3 snapshot")
+            raise
 
         logger.info("Started S3 storage watcher", bucket=self.bucket, prefix=self.prefix)
 
         try:
             while True:
-                await asyncio.sleep(poll_interval_seconds)
-                current_files = await self.list_files()
+                try:
+                    await asyncio.sleep(poll_interval_seconds)
+                except asyncio.CancelledError:
+                    logger.info("S3 watcher cancelled", bucket=self.bucket)
+                    raise
+                try:
+                    current_files = await self.list_files()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Failed to list S3 files during poll")
+                    continue
                 current = {f.path: f for f in current_files}
 
                 for path, file in current.items():
@@ -191,8 +212,14 @@ class S3Storage(Storage):
                         await self._emit(on_event, FileDeletedEvent(file))
 
                 previous = current
+        except asyncio.CancelledError:
+            raise
         finally:
-            await self.close()
+            # Best-effort close – WatcherService also calls close(), so this must be idempotent.
+            try:
+                await self.close()
+            except Exception:
+                pass
 
     async def _emit(self, on_event: FileEventCallback, event: FileEvent) -> None:
         try:

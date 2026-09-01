@@ -162,17 +162,37 @@ class GCSStorage(Storage):
         on_event: FileEventCallback,
         poll_interval_seconds: float = 30.0,
     ) -> None:
-        """Poll GCS and emit events when blobs change."""
+        """Poll GCS and emit events when blobs change.
+
+        Fully cancellable – ``CancelledError`` is propagated so
+        ``WatcherService`` can manage shutdown cleanly.
+        """
         previous: dict[str, StorageFile] = {}
-        for file in await self.list_files():
-            previous[file.path] = file
+        try:
+            for file in await self.list_files():
+                previous[file.path] = file
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Failed to list initial GCS snapshot")
+            raise
 
         logger.info("Started GCS storage watcher", bucket=self.bucket, prefix=self.prefix)
 
         try:
             while True:
-                await asyncio.sleep(poll_interval_seconds)
-                current_files = await self.list_files()
+                try:
+                    await asyncio.sleep(poll_interval_seconds)
+                except asyncio.CancelledError:
+                    logger.info("GCS watcher cancelled", bucket=self.bucket)
+                    raise
+                try:
+                    current_files = await self.list_files()
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    logger.exception("Failed to list GCS files during poll")
+                    continue
                 current = {f.path: f for f in current_files}
 
                 for path, file in current.items():
@@ -187,8 +207,13 @@ class GCSStorage(Storage):
                         await self._emit(on_event, FileDeletedEvent(file))
 
                 previous = current
+        except asyncio.CancelledError:
+            raise
         finally:
-            await self.close()
+            try:
+                await self.close()
+            except Exception:
+                pass
 
     async def _emit(self, on_event: FileEventCallback, event: FileEvent) -> None:
         try:

@@ -216,21 +216,61 @@ class EvalRunResponse(BaseModel):
 # Module-level watcher handle (single-process).
 _watcher: WatcherService | None = None
 _watcher_lock = asyncio.Lock()
+# Set to True by ``raggit serve --no-watcher`` to suppress auto-start in
+# the FastAPI lifespan. Also honoured via ``RAGGIT_NO_AUTO_WATCHER`` env.
+_watcher_auto_start_disabled: bool = False
 
 
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
-    """Startup and shutdown lifespan events."""
+    """Startup and shutdown lifespan events.
+
+    The watcher is now automatic: when the API starts (whether via
+    ``raggit serve`` or ``uvicorn raggit.api.server:app``) it will
+    auto-start the watcher unless explicitly disabled via
+    ``--no-watcher`` or ``RAGGIT_NO_AUTO_WATCHER=1``. This makes the
+    system work independently without requiring manual
+    ``POST /watcher/start`` calls.
+    """
+    import os
+
     settings = get_settings()
     configure_logging(settings.log_level)
     logger.info("FastAPI server starting")
+
+    auto_started = False
+    # Honour explicit env disable.
+    no_auto_env = os.getenv("RAGGIT_NO_AUTO_WATCHER", "").lower() in ("1", "true", "yes")
+    if not _watcher_auto_start_disabled and not no_auto_env:
+        async with _watcher_lock:
+            if _watcher is None:
+                cfg = settings.rag_config
+                if cfg.storage is not None:
+                    try:
+                        candidate = WatcherService(cfg)
+                        await candidate.start()
+                        globals()["_watcher"] = candidate
+                        auto_started = True
+                        logger.info(
+                            "Auto-started watcher via API lifespan",
+                            storage_type=cfg.storage.source_type.value,
+                            uri=cfg.storage.uri,
+                        )
+                    except Exception:
+                        logger.exception("Failed to auto-start watcher via lifespan")
+
     try:
         yield
     finally:
         logger.info("FastAPI server shutting down")
         async with _watcher_lock:
             if _watcher is not None:
-                await _watcher.stop()
+                try:
+                    await _watcher.stop()
+                except Exception:
+                    logger.exception("Error stopping watcher during shutdown")
+                finally:
+                    globals()["_watcher"] = None
 
 
 # ---------------------------------------------------------------------------
