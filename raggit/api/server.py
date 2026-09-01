@@ -872,9 +872,17 @@ async def watcher_stop() -> WatcherStatusResponse:
 async def run_eval(request: EvalRunRequest) -> EvalRunResponse:
     """Run an evaluation dataset and return the full report.
 
+    Supports all three tiers via ``dataset.kind``:
+    - ``component``: isolated primitives (parser, chunker, etc.)
+    - ``pipeline``: ingestion / retrieval chains
+    - ``system``: end-to-end (default) – ingestion + retrieval + LLM
+    - ``all``: runs present tiers sequentially
+
     Provide either an inline ``dataset`` or a ``dataset_path`` to a JSON/YAML
     file on the server.
     """
+    from raggit.eval.models import EvalKind
+
     if request.dataset_path is not None:
         dataset = load_dataset(request.dataset_path)
     elif request.dataset is not None:
@@ -885,19 +893,72 @@ async def run_eval(request: EvalRunRequest) -> EvalRunResponse:
             detail="Provide either dataset or dataset_path",
         )
 
-    if not dataset.tests:
-        raise HTTPException(
-            status_code=400,
-            detail="Dataset contains no test cases",
-        )
+    # Validate tier has tests
+    if dataset.kind == EvalKind.COMPONENT and not dataset.component_tests:
+        raise HTTPException(status_code=400, detail="Component dataset has no component_tests")
+    if dataset.kind == EvalKind.PIPELINE and not dataset.pipeline_tests:
+        raise HTTPException(status_code=400, detail="Pipeline dataset has no pipeline_tests")
+    if dataset.kind == EvalKind.SYSTEM and not dataset.tests:
+        raise HTTPException(status_code=400, detail="Dataset contains no test cases")
+    if dataset.kind == EvalKind.ALL and not (dataset.tests or dataset.component_tests or dataset.pipeline_tests):
+        raise HTTPException(status_code=400, detail="Dataset kind 'all' has no tests")
 
     config = get_settings().rag_config
     configure_logging(config.log_level)
-    runner = EvalRunner(config)
-    try:
+
+    # Dispatch by tier
+    if dataset.kind == EvalKind.COMPONENT:
+        from raggit.eval.component import ComponentRunner
+
+        runner = ComponentRunner(config)
         report = await runner.run(dataset)
-    finally:
-        await runner.close()
+    elif dataset.kind == EvalKind.PIPELINE:
+        from raggit.eval.pipeline import PipelineRunner
+
+        runner = PipelineRunner(config)  # type: ignore[assignment]
+        try:
+            report = await runner.run(dataset)
+        finally:
+            await runner.close()  # type: ignore[attr-defined]
+    elif dataset.kind == EvalKind.ALL:
+        from raggit.eval.component import ComponentRunner
+        from raggit.eval.pipeline import PipelineRunner
+        from raggit.eval.system import SystemRunner
+
+        reports = []
+        if dataset.component_tests:
+            cr = ComponentRunner(config)
+            reports.append(await cr.run(dataset))
+        if dataset.pipeline_tests:
+            pr = PipelineRunner(config)
+            try:
+                reports.append(await pr.run(dataset))
+            finally:
+                await pr.close()
+        if dataset.tests:
+            sr = SystemRunner(config)
+            try:
+                reports.append(await sr.run(dataset))
+            finally:
+                await sr.close()
+        if not reports:
+            raise HTTPException(status_code=400, detail="No tests to run for kind 'all'")
+        report = reports[0]
+        for extra in reports[1:]:
+            report.summary.aggregates.extend(extra.summary.aggregates)
+            report.summary.per_test.extend(extra.summary.per_test)
+            report.summary.total_tests += extra.summary.total_tests
+            report.summary.passed_tests += extra.summary.passed_tests
+            report.summary.failed_tests += extra.summary.failed_tests
+        # fall through to saving
+    else:
+        from raggit.eval.system import SystemRunner
+
+        runner = SystemRunner(config)  # type: ignore[assignment]
+        try:
+            report = await runner.run(dataset)
+        finally:
+            await runner.close()  # type: ignore[attr-defined]
 
     saved_to: str | None = None
     if request.output_path is not None:

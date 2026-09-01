@@ -162,7 +162,7 @@
             <li><strong>Document lifecycle status</strong> tracks pending, indexing, parsed, chunked, embedded, completed, failed, and deleted states.</li>
             <li><strong>Async-first</strong> architecture using asyncpg, async Qdrant client, and async cloud SDKs.</li>
             <li><strong>FastAPI HTTP API</strong> with interactive <code>/docs</code> Swagger UI for every operation: query, manage documents, inspect chunks and logs, update configuration, trigger ingestion, and control the watcher.</li>
-            <li><strong>Evaluation framework</strong> with retrieval metrics (recall@k, precision@k, MRR, NDCG@k, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.</li>
+            <li><strong>Three-tier evaluation framework</strong> – isolated <em>component</em> suites (parser, chunker, cleaner, PII, injection, sanitizer, RRF, reranker, safety, embedder, storage), <em>pipeline</em> suites (ingestion &amp; retrieval chains), and <em>system</em> end-to-end (22+ system metrics including citations, hallucination, tenant/tag/prefix filters, p50/p95 latency, audit). 69+ metrics total, `kind: all` runs every tier.</li>
             <li><strong>Optional MCP server</strong> exposing the same core operations to MCP clients over stdio or SSE. Install with <code>raggit[mcp]</code>.</li>
           </ul>
         </section>
@@ -740,80 +740,205 @@ curl -X POST http://localhost:8000/watcher/stop</code></pre>
 
         <section id="evaluation">
           <h2>Evaluation</h2>
-          <p>raggit includes a built-in evaluation framework for measuring retrieval and answer quality against annotated datasets. You can run evaluations from the CLI or the HTTP API, and export reports as JSON or Markdown.</p>
+          <p>raggit ships a <strong>three-tier</strong> evaluation framework so every feature is measurable in isolation, as a pipeline, and end-to-end. Run it from the CLI or HTTP API and export reports as JSON or Markdown. All 69+ metrics are available via <code>--list-metrics</code>.</p>
 
-          <h3>Dataset format</h3>
-          <p>Datasets are JSON or YAML files containing test cases. Each test case has a query, optional filters, expected chunk IDs, expected answer, and tags.</p>
+          <div class="callout callout-note">
+            <div class="callout-title">Three tiers at a glance</div>
+            <ul>
+              <li><strong>Component</strong> – isolated primitives (parser, chunker, cleaner, PII, injection, sanitizer, embedder, RRF, reranker, safety, storage, watcher, retriever). Synthetic data, no DB needed, fast.</li>
+              <li><strong>Pipeline</strong> – ingestion chain (parse→chunk→clean→embed) and retrieval chain (sanitize→rewrite→BM25/semantic→RRF→rerank→threshold→parent→traversal) with real DB/vector store.</li>
+              <li><strong>System</strong> – end-to-end ingestion + retrieval + LLM augmentation, citations, filtering, safety, MCP. The original <code>EvalRunner</code> tier.</li>
+              <li><strong>All</strong> – runs component + pipeline + system sequentially from a single <code>kind: all</code> dataset.</li>
+            </ul>
+          </div>
 
+          <h3>Dataset format by tier</h3>
+          <p>Datasets are JSON/YAML with a <code>kind</code> discriminator. Old datasets without <code>kind</code> default to <code>system</code> for backwards compatibility.</p>
+
+          <h4>Component (<code>kind: component</code>)</h4>
+          <pre><code>name: chunker-eval
+kind: component
+component: chunker   # parser|chunker|cleaner|pii|injection|sanitizer|embedder|rrf|reranker|safety|storage|watcher|retriever
+metrics: [chunker_section_preservation, chunker_dedup_effectiveness]
+k_values: [5]
+component_tests:
+  - id: chunker-md-1
+    component: chunker
+    input: {text: "# Title\nContent", path: "doc.md"}
+    expected: {expected_titles: ["Title"]}
+    tags: [markdown]</code></pre>
+
+          <h4>Pipeline (<code>kind: pipeline</code>)</h4>
+          <pre><code>name: ingestion-pipeline
+kind: pipeline
+pipeline: ingestion   # ingestion|retrieval|e2e
+metrics: [pipeline_ingestion_success_rate, pipeline_retrieval_success_rate]
+pipeline_tests:
+  - id: ingest-1
+    pipeline: ingestion
+    documents: [{path: "note.md", text: "# Hello\nWorld"}]
+  - id: retrieve-1
+    pipeline: retrieval
+    query: "What is hello?"
+    expected_chunk_ids: ["11111111-1111-1111-1111-111111111111"]</code></pre>
+
+          <h4>System (<code>kind: system</code>)</h4>
           <pre><code>name: my-eval
-version: "1.0.0"
+kind: system
 metrics:
   - retrieval_recall@k
   - retrieval_mrr
   - answer_contains
   - answer_semantic_similarity
+  - system_citation_precision
+  - filter_tenant_accuracy
 k_values: [5, 10]
 tests:
   - id: q1
     query: "What is raggit?"
+    filters: {tenant_id: "acme", tags: ["finance"]}
     expected_chunk_ids:
       - 11111111-1111-1111-1111-111111111111
     expected_answer: "raggit is a production-grade RAG system"
     tags: [basic]</code></pre>
 
-          <h3>Metrics</h3>
+          <h4>All tiers (<code>kind: all</code>)</h4>
+          <pre><code>name: raggit-all-tiers
+kind: all
+metrics: [chunker_section_preservation, pipeline_ingestion_success_rate, retrieval_recall@k, system_citation_precision]
+component_tests: [...]  # every component
+pipeline_tests: [...]   # ingestion + retrieval + e2e
+tests: [...]            # system end-to-end
+</code></pre>
+
+          <h3>Metrics – every feature covered</h3>
           <table>
             <thead>
-              <tr><th>Metric</th><th>Description</th></tr>
+              <tr><th>Metric</th><th>Tier</th><th>Feature</th></tr>
             </thead>
             <tbody>
-              <tr><td><code>retrieval_recall@k</code></td><td>Fraction of relevant chunks in top-k.</td></tr>
-              <tr><td><code>retrieval_precision@k</code></td><td>Fraction of top-k chunks that are relevant.</td></tr>
-              <tr><td><code>retrieval_mrr</code></td><td>Reciprocal rank of the first relevant chunk.</td></tr>
-              <tr><td><code>retrieval_ndcg@k</code></td><td>Normalized discounted cumulative gain at k.</td></tr>
-              <tr><td><code>retrieval_hit_rate@k</code></td><td>1 if any relevant chunk is in top-k.</td></tr>
-              <tr><td><code>answer_exact_match</code></td><td>Case-insensitive exact match.</td></tr>
-              <tr><td><code>answer_contains</code></td><td>Expected answer text appears in generated answer.</td></tr>
-              <tr><td><code>answer_semantic_similarity</code></td><td>Cosine similarity of embedding vectors.</td></tr>
-              <tr><td><code>answer_llm_judge</code></td><td>LLM scores answer quality 0-1 with reasoning.</td></tr>
-              <tr><td><code>groundedness</code></td><td>Whether the answer is supported by retrieved chunks.</td></tr>
-              <tr><td><code>latency_ms</code></td><td>End-to-end query latency.</td></tr>
-              <tr><td><code>refusal_accuracy</code></td><td>Whether refusal behavior matches expectation.</td></tr>
+              <tr><td><code>parser_parse_success</code></td><td>component</td><td>Parser: any supported extension loads</td></tr>
+              <tr><td><code>parser_text_fidelity</code></td><td>component</td><td>Parser: extracted text 3-gram fidelity</td></tr>
+              <tr><td><code>parser_page_preservation</code></td><td>component</td><td>PDF: <code>--- Page N ---</code> markers</td></tr>
+              <tr><td><code>parser_html_stripping</code></td><td>component</td><td>HTML: script/style/nav removal</td></tr>
+              <tr><td><code>chunker_section_preservation</code></td><td>component</td><td>Markdown headers, headings</td></tr>
+              <tr><td><code>chunker_page_preservation</code></td><td>component</td><td>PDF pages kept as chunks</td></tr>
+              <tr><td><code>chunker_function_boundary</code></td><td>component</td><td>Code: def/class/function split</td></tr>
+              <tr><td><code>chunker_dedup_effectiveness</code></td><td>component</td><td>Jaccard 0.92 dedup</td></tr>
+              <tr><td><code>chunker_word_count_accuracy</code></td><td>component</td><td>Word count within tolerance</td></tr>
+              <tr><td><code>chunker_overlap_correctness</code></td><td>component</td><td>Sliding window overlap</td></tr>
+              <tr><td><code>chunker_format_aware</code></td><td>component</td><td>Format-aware vs fallback</td></tr>
+              <tr><td><code>cleaner_effectiveness</code></td><td>component</td><td>NFKC, hyphenation, whitespace</td></tr>
+              <tr><td><code>cleaner_unicode_normalization</code></td><td>component</td><td>Unicode NFKC</td></tr>
+              <tr><td><code>cleaner_hyphenation_fix</code></td><td>component</td><td>word-\\nword → wordword</td></tr>
+              <tr><td><code>cleaner_whitespace_collapse</code></td><td>component</td><td>Collapse spaces / blank lines</td></tr>
+              <tr><td><code>pii_redaction_recall</code></td><td>component</td><td>PII: email/phone/SSN/card/IP recall</td></tr>
+              <tr><td><code>pii_redaction_precision</code></td><td>component</td><td>PII precision</td></tr>
+              <tr><td><code>pii_redaction_f1</code></td><td>component</td><td>PII F1</td></tr>
+              <tr><td><code>injection_hardening_recall</code></td><td>component</td><td>Injection: ignore/system/override</td></tr>
+              <tr><td><code>injection_hardening_precision</code></td><td>component</td><td>Injection false-positive</td></tr>
+              <tr><td><code>sanitizer_keyword_recall</code></td><td>component</td><td>Keywords vs expected</td></tr>
+              <tr><td><code>sanitizer_stopword_removal_rate</code></td><td>component</td><td>Stopwords removed</td></tr>
+              <tr><td><code>rrf_fusion_quality</code></td><td>component</td><td>Weighted RRF nDCG</td></tr>
+              <tr><td><code>reranker_gain</code></td><td>component</td><td>Cross-encoder MRR gain</td></tr>
+              <tr><td><code>threshold_retention_rate</code></td><td>pipeline</td><td>min_score retention</td></tr>
+              <tr><td><code>parent_window_gain</code></td><td>pipeline</td><td>Parent-window recall gain</td></tr>
+              <tr><td><code>traversal_precision</code></td><td>pipeline</td><td>Relevance-chain traversal</td></tr>
+              <tr><td><code>safety_groundedness_accuracy</code></td><td>component</td><td>Groundedness heuristic</td></tr>
+              <tr><td><code>safety_refusal_f1</code></td><td>component</td><td>Refusal on empty/low-score</td></tr>
+              <tr><td><code>embedder_cosine_accuracy</code></td><td>component</td><td>Cosine ≈ expected</td></tr>
+              <tr><td><code>embedder_latency</code></td><td>component</td><td>Embedding ms</td></tr>
+              <tr><td><code>storage_path_traversal_block_rate</code></td><td>component</td><td>Path traversal blocked</td></tr>
+              <tr><td><code>watcher_debounce_accuracy</code></td><td>component</td><td>Debounce per-path</td></tr>
+              <tr><td><code>retrieval_recall@k</code></td><td>system/pipeline</td><td>Recall of relevant chunks</td></tr>
+              <tr><td><code>retrieval_precision@k</code></td><td>system/pipeline</td><td>Precision in top-k</td></tr>
+              <tr><td><code>retrieval_mrr</code></td><td>system/pipeline</td><td>Reciprocal rank</td></tr>
+              <tr><td><code>retrieval_ndcg@k</code></td><td>system/pipeline</td><td>nDCG</td></tr>
+              <tr><td><code>retrieval_hit_rate@k</code></td><td>system/pipeline</td><td>Hit rate</td></tr>
+              <tr><td><code>bm25_recall@k</code></td><td>pipeline</td><td>BM25 only</td></tr>
+              <tr><td><code>semantic_recall@k</code></td><td>pipeline</td><td>Semantic only</td></tr>
+              <tr><td><code>hybrid_recall@k</code></td><td>pipeline</td><td>Hybrid fused</td></tr>
+              <tr><td><code>answer_exact_match</code></td><td>system</td><td>Exact string match</td></tr>
+              <tr><td><code>answer_contains</code></td><td>system</td><td>Expected in answer</td></tr>
+              <tr><td><code>answer_semantic_similarity</code></td><td>system</td><td>Embed cosine</td></tr>
+              <tr><td><code>answer_llm_judge</code></td><td>system</td><td>LLM 0-5 → 0-1</td></tr>
+              <tr><td><code>groundedness</code></td><td>system</td><td>Answer grounded in context</td></tr>
+              <tr><td><code>latency_ms</code></td><td>system/pipeline</td><td>End-to-end ms</td></tr>
+              <tr><td><code>system_latency_p50</code></td><td>system</td><td>p50 latency</td></tr>
+              <tr><td><code>system_latency_p95</code></td><td>system</td><td>p95 latency</td></tr>
+              <tr><td><code>refusal_accuracy</code></td><td>system</td><td>Refusal matches expected</td></tr>
+              <tr><td><code>system_citation_precision</code></td><td>system</td><td>Citations vs expected</td></tr>
+              <tr><td><code>system_citation_recall</code></td><td>system</td><td>Citation recall</td></tr>
+              <tr><td><code>system_hallucination_rate</code></td><td>system</td><td>1 - groundedness</td></tr>
+              <tr><td><code>filter_tenant_accuracy</code></td><td>system</td><td>tenant_id filter</td></tr>
+              <tr><td><code>filter_tag_accuracy</code></td><td>system</td><td>tag filter</td></tr>
+              <tr><td><code>filter_prefix_accuracy</code></td><td>system</td><td>source_uri/filename prefix</td></tr>
+              <tr><td><code>system_audit_coverage</code></td><td>system</td><td>Audit logs emitted</td></tr>
+              <tr><td><code>system_e2e_success</code></td><td>system</td><td>Overall pass (not refused when not expected + grounded)</td></tr>
+              <tr><td><code>pipeline_ingestion_success_rate</code></td><td>pipeline</td><td>Parse→chunk→clean success</td></tr>
+              <tr><td><code>pipeline_retrieval_success_rate</code></td><td>pipeline</td><td>Retrieval not refused</td></tr>
+              <tr><td><code>mcp_tool_success</code></td><td>system</td><td>MCP tools (synthetic)</td></tr>
             </tbody>
           </table>
 
-          <h3>CLI</h3>
-          <pre><code># Generate an empty dataset template
+          <h3>CLI – every tier</h3>
+          <pre><code># Component – isolated primitive (no DB needed for many)
+uv run raggit eval --generate --kind component --component chunker --name chunker-suite
+uv run raggit eval chunker-suite.yaml
+
+# All components at once
+uv run raggit eval --generate --kind component --component retriever --name retriever-suite
+
+# Pipeline – ingestion & retrieval chains (needs DB/vector store)
+uv run raggit eval --generate --kind pipeline --pipeline ingestion --name ingest-pipe
+uv run raggit eval --generate --kind pipeline --pipeline retrieval --name retrieve-pipe
+uv run raggit eval ingest-pipe.yaml
+uv run raggit eval retrieve-pipe.yaml
+
+# System – end-to-end with LLM (default)
 uv run raggit eval --generate --name my-eval
-
-# Run evaluation and print a console report
-uv run raggit eval my-eval.yaml
-
-# Save a JSON or Markdown report
 uv run raggit eval my-eval.yaml --output report.json
-uv run raggit eval my-eval.yaml --output report.md</code></pre>
+uv run raggit eval my-eval.yaml --output report.md
 
-          <h3>HTTP API</h3>
-          <pre><code>curl -X POST http://localhost:8000/eval/run \
+# Comprehensive: every feature in one file
+uv run raggit eval --comprehensive --name full-suite   # kind: system, 12 tests, 22 metrics
+uv run raggit eval --generate --kind all --name all-tiers   # component+pipeline+system
+
+# Explore metrics
+uv run raggit eval --list-metrics
+uv run raggit eval --generate --kind component --component pii --name pii-suite
+</code></pre>
+
+          <h3>HTTP API – tier-aware</h3>
+          <pre><code># Component
+curl -X POST http://localhost:8000/eval/run \
+  -H "Content-Type: application/json" \
+  -d '{"dataset": {"name": "chunker-suite","kind": "component","component": "chunker","metrics": ["chunker_section_preservation"],"component_tests": [{"id": "c1","component": "chunker","input": {"text": "# T\nhello"},"expected": {"expected_titles": ["T"]}}]}}'
+
+# Pipeline
+curl -X POST http://localhost:8000/eval/run \
+  -H "Content-Type: application/json" \
+  -d '{"dataset": {"name": "pipe","kind": "pipeline","pipeline": "ingestion","pipeline_tests": [{"id": "p1","pipeline": "ingestion","documents": [{"path": "a.md","text": "# Hi"}]}]}}'
+
+# System (default)
+curl -X POST http://localhost:8000/eval/run \
   -H "Content-Type: application/json" \
   -d '{
     "dataset": {
       "name": "my-eval",
+      "kind": "system",
       "metrics": ["retrieval_recall@k", "retrieval_mrr"],
       "k_values": [5],
-      "tests": [
-        {
-          "id": "q1",
-          "query": "What is raggit?",
-          "expected_chunk_ids": ["11111111-1111-1111-1111-111111111111"]
-        }
-      ]
+      "tests": [{"id": "q1","query": "What is raggit?","expected_chunk_ids": ["11111111-1111-1111-1111-111111111111"]}]
     }
-  }'</code></pre>
+  }'
+
+# All tiers in one call
+curl -X POST http://localhost:8000/eval/run -d '{"dataset": {"kind": "all", ...}}'</code></pre>
 
           <div class="callout callout-tip">
             <div class="callout-title">Tip</div>
-            <p>Use evaluation runs after changing chunking, embedding, retrieval, or reranking settings to measure the impact on real queries before deploying to production.</p>
+            <p>Start with <code>component</code> suites when iterating on a single feature (e.g. chunker headers), then validate the <code>pipeline</code> chain, then run the <code>system</code> or <code>all</code> suite for release confidence. Use <code>comprehensive</code> nightly.</p>
           </div>
         </section>
 
@@ -900,7 +1025,7 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
               </tr>
               <tr>
                 <td><code>raggit eval &lt;dataset&gt;</code></td>
-                <td>Run an evaluation dataset and print or save a report.</td>
+                <td>Run an evaluation dataset (component, pipeline, system, or all) and print or save a report. 69+ metrics.</td>
               </tr>
             </tbody>
           </table>
@@ -930,8 +1055,13 @@ uv run raggit eval my-eval.yaml --output report.md</code></pre>
           <p>Shows a table of indexed documents and active embedding collections.</p>
 
           <h3>eval</h3>
-          <pre><code>uv run raggit eval &lt;dataset.yaml&gt; [OPTIONS]</code></pre>
-          <p>Options: <code>--generate</code>, <code>--name</code>, <code>--description</code>, <code>--metric</code> (repeatable), <code>--k</code> (repeatable), <code>--output</code>, <code>--output-format</code>, <code>--log-level</code>.</p>
+          <pre><code>uv run raggit eval &lt;dataset.yaml&gt; [OPTIONS]
+uv run raggit eval --generate --kind component --component chunker --name my-chunker
+uv run raggit eval --generate --kind pipeline --pipeline ingestion --name pipe
+uv run raggit eval --comprehensive --name full
+uv run raggit eval --generate --kind all --name all-tiers</code></pre>
+          <p>Options: <code>--generate</code>, <code>--comprehensive</code>, <code>--list-metrics</code>, <code>--kind component|pipeline|system|all</code>, <code>--component parser|chunker|...</code>, <code>--pipeline ingestion|retrieval|e2e</code>, <code>--name</code>, <code>--description</code>, <code>--metric</code> (repeatable, 69+ available), <code>--k</code> (repeatable), <code>--output</code>, <code>--output-format</code>, <code>--log-level</code>.</p>
+          <p>Tier mapping: <code>component</code> isolates primitives (14 types) with synthetic data; <code>pipeline</code> tests ingestion (parse→chunk→clean→embed) and retrieval (sanitize→RRF→rerank→traversal) with DB; <code>system</code> end-to-end with LLM, citations, filters, p50/p95; <code>all</code> runs every tier sequentially.</p>
         </section>
 
         <section id="storage-backends">
@@ -1125,10 +1255,10 @@ uv run pytest</code></pre>
   cli/            # Typer CLI commands
   core/           # Configuration, logging, audit, watcher service
   db/             # SQLAlchemy models, repositories, sessions, vector store
-  eval/           # Evaluation framework: metrics, datasets, runner, reports
-  ingestion/      # Parsing, chunking, cleaning, embedding, indexer
+  eval/           # Evaluation: component (14 types) / pipeline (ingestion|retrieval|e2e) / system (E2E) / all; 69+ metrics
+  ingestion/      # Parsing, chunking, cleaning, PII, injection, embedding, indexer
   llm/            # LLM providers and answer augmentation
-  retrieval/      # Search, RRF, reranker, safety
+  retrieval/      # Sanitizer, rewrite, BM25, semantic, RRF, reranker, threshold, parent-window, traversal, safety
   storage/        # Storage backends and factory</code></pre>
 
           <h3>Adding a storage backend</h3>

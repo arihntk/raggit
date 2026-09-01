@@ -212,17 +212,28 @@ uv run raggit serve
      -d '{"query": "What is raggit?"}'
    ```
 
-9. **Evaluate the system**:
-
-   Create an empty evaluation dataset and fill it with annotated test cases:
+9. **Evaluate the system** (three tiers – component → pipeline → system):
 
    ```bash
+   # Component: isolated primitive (parser, chunker, pii, sanitizer, RRF, etc.)
+   uv run raggit eval --generate --kind component --component chunker --name chunker-suite
+   uv run raggit eval chunker-suite.yaml
+
+   # Pipeline: ingestion and retrieval chains
+   uv run raggit eval --generate --kind pipeline --pipeline ingestion --name pipe
+   uv run raggit eval pipe.yaml
+
+   # System: end-to-end (default)
    uv run raggit eval --generate --name my-eval
-   # edit my-eval.yaml
    uv run raggit eval my-eval.yaml --output report.json
+
+   # Comprehensive (every feature) or all tiers at once
+   uv run raggit eval --comprehensive --name full-suite
+   uv run raggit eval --generate --kind all --name all-tiers
+   uv run raggit eval --list-metrics   # 69+ metrics
    ```
 
-   raggit computes retrieval metrics (recall@k, precision@k, MRR, NDCG, hit rate), answer metrics (exact match, contains, semantic similarity, LLM-as-judge), groundedness, latency, and refusal accuracy.
+   Component tier covers parser, chunker, cleaner, PII, injection, sanitizer, embedder, RRF, reranker, safety, storage, watcher, retriever. Pipeline tier covers ingestion (parse→chunk→clean→embed) and retrieval (sanitize→rewrite→BM25/semantic→RRF→rerank→threshold→parent→traversal). System tier covers retrieval + answer quality, groundedness, citations, hallucination, tenant/tag/prefix filters, latency p50/p95, audit, MCP.
 
 10. **Connect via MCP (optional)**:
 
